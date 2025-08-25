@@ -1,0 +1,12 @@
+{
+  "domain": "tled_ble",
+  "name": "TLED BLE Mesh",
+  "version": "1.3.0",
+  "config_flow": true,
+  "documentation": "",
+  "requirements": ["bleak>=0.19.5"],
+  "dependencies": [],
+  "codeowners": ["@xiongyu"],
+  "iot_class": "local_polling",
+  "components": ["light", "text"]
+}
