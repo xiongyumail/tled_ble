@@ -4,12 +4,13 @@ import logging
 from typing import Optional
 from bleak import BleakClient, BleakError
 from homeassistant.components.bluetooth import async_get_scanner
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 
 from .const import (
     HEADER,
-    CONTROL_CMD
+    CONTROL_CMD,
+    DOMAIN
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -29,6 +30,7 @@ class TLEDBLEController:
         self.max_retries = 3  # 默认最大重试次数
         self.base_timeout = 15.0  # 基础超时时间（秒）
         self.subdevices = {}  # 存储子设备状态 {地址: {name, state}}
+        self.config_entry = None  # 配置条目引用
 
     async def connect(self, timeout: Optional[float] = None, retries: Optional[int] = None) -> bool:
         """连接到BLE设备"""
@@ -129,24 +131,43 @@ class TLEDBLEController:
             return False
 
     async def send_control_command(self, address: int, is_on: bool, brightness: int) -> bool:
-        """发送灯光控制命令（修正：移除校验位，使用0-255亮度范围）"""
-        # 直接使用原始亮度值（0-255），无需转换为0-100
+        """发送灯光控制命令（修正：确保地址为整数类型）"""
+        # 确保地址是整数类型
+        if isinstance(address, str):
+            try:
+                # 尝试从十六进制字符串转换
+                address = int(address, 16)
+            except ValueError:
+                _LOGGER.error(f"无效的地址格式: {address}，必须是整数或十六进制字符串")
+                return False
+        
+        # 直接使用原始亮度值（0-255）
         normalized_brightness = brightness if brightness else 0
         
-        # 构建命令帧（移除校验位，地址放在命令前）
+        # 构建命令帧
         cmd_frame = bytearray([
             HEADER,  # 帧头（0xA5）
-            (address >> 8) & 0xFF,      # 设备地址高8位（0xFF）
-            address & 0xFF,             # 设备地址低8位（0xFF）
-            (CONTROL_CMD >> 8) & 0xFF,  # 命令高8位（0x82）
-            CONTROL_CMD & 0xFF,         # 命令低8位（0x02）
-            0x01 if is_on else 0x00,    # 开关状态（0x01）
-            normalized_brightness,      # 亮度（0xFF）
-            # 移除校验位（原0x00）
+            address & 0xFF,             # 设备地址低8位
+            (address >> 8) & 0xFF,      # 设备地址高8位
+            (CONTROL_CMD >> 8) & 0xFF,  # 命令高8位
+            CONTROL_CMD & 0xFF,         # 命令低8位
+            0x01 if is_on else 0x00,    # 开关状态
+            normalized_brightness,      # 亮度
         ])
         
-        # 发送命令
-        return await self.send_command(cmd_frame)
+        # 发送命令并更新本地状态
+        success = await self.send_command(cmd_frame)
+        if success and address in self.subdevices:
+            self.subdevices[address]["state"] = {
+                "on": is_on,
+                "brightness": normalized_brightness
+            }
+            # 发送状态更新事件
+            self.hass.bus.async_fire(
+                f"{DOMAIN}_subdevice_updated",
+                {"address": address, "state": self.subdevices[address]["state"]}
+            )
+        return success
 
     async def scan_for_device(self, timeout: float = 10.0) -> bool:
         """扫描设备是否在范围内"""

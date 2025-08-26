@@ -25,6 +25,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     # 创建BLE控制器实例
     controller = TLEDBLEController(hass, mac, service_uuid, char_uuid)
     controller.name = name
+    controller.config_entry = entry  # 保存配置条目引用
+    controller.subdevices = entry.options.get("subdevices", {})  # 加载子设备配置
+    
     hass.data[DOMAIN][mac] = controller
     
     # 连接到设备
@@ -33,11 +36,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         _LOGGER.error(f"Failed to connect to {name} at {mac}")
         return False
     
+    # 注册配置更新监听
+    entry.async_on_unload(entry.add_update_listener(async_update_options))
+    
     # 加载平台
     platforms = ["light", "text"]
     await hass.config_entries.async_forward_entry_setups(entry, platforms)
     
     return True
+
+async def async_update_options(hass: HomeAssistant, entry: ConfigEntry):
+    """处理配置选项更新"""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Unload a config entry."""

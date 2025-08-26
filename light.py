@@ -28,12 +28,12 @@ async def async_setup_entry(
     # 创建子设备实体
     entities = []
     
-    # 添加已发现的子设备
+    # 添加已配置的子设备
     for addr, info in controller.subdevices.items():
         entities.append(TLEDBLELight(controller, addr, info["name"]))
     
     # 添加广播控制实体（控制所有设备）
-    entities.append(TLEDBLELight(controller, BROADCAST_ADDR, "All TLED Devices"))
+    entities.append(TLEDBLELight(controller, int(BROADCAST_ADDR), "All TLED Devices"))
     
     async_add_entities(entities)
 
@@ -53,18 +53,40 @@ class TLEDBLELight(LightEntity):
             f"{DOMAIN}_subdevice_updated", self._handle_state_update
         )
         
+        # 注册配置更新监听（修正后的代码）
+        self._unsub_config_update = self.controller.config_entry.add_update_listener(
+            self._handle_config_update_listener
+        )
+        
         # 初始化状态
         if address in controller.subdevices:
             state = controller.subdevices[address]["state"]
             self._is_on = state["on"]
             self._brightness = state["brightness"]
 
+    async def _handle_config_update_listener(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        """处理配置更新的监听器"""
+        self._handle_config_update(entry)
+
+    @callback
+    def _handle_config_update(self, entry: ConfigEntry) -> None:
+        """配置更新时重新加载实体"""
+        self.controller.subdevices = entry.options.get("subdevices", {})
+        # 检查当前设备是否仍在配置中
+        if self.address in self.controller.subdevices:
+            info = self.controller.subdevices[self.address]
+            self._name = info["name"]
+            self._is_on = info["state"]["on"]
+            self._brightness = info["state"]["brightness"]
+            self.async_write_ha_state()
+
     @callback
     def _handle_state_update(self, event):
-        """Handle state updates from the controller."""
-        if event.data["address"] == self.address:
-            self._is_on = event.data["state"]["on"]
-            self._brightness = event.data["state"]["brightness"]
+        """处理子设备状态更新事件"""
+        if event.data.get("address") == self.address:
+            state = event.data["state"]
+            self._is_on = state["on"]
+            self._brightness = state["brightness"]
             self.async_write_ha_state()
 
     @property
@@ -140,3 +162,5 @@ class TLEDBLELight(LightEntity):
         """Clean up when entity is removed."""
         if hasattr(self, "_unsub_update"):
             self._unsub_update()
+        if hasattr(self, "_unsub_config_update"):
+            self._unsub_config_update()

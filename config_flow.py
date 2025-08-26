@@ -3,6 +3,7 @@ import logging
 import asyncio
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.config_entries import ConfigFlow, ConfigEntry, OptionsFlow
 from homeassistant.core import callback
 from homeassistant.const import CONF_NAME, CONF_MAC
 from homeassistant.data_entry_flow import FlowResult
@@ -14,7 +15,7 @@ from .const import DOMAIN, MANUFACTURER, DEVICE_NAME_PREFIX
 
 _LOGGER = logging.getLogger(__name__)
 
-class TLEDBLEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
     """TLED BLE设备的配置流程，支持扫描和信号强度显示"""
     
     VERSION = 1
@@ -264,3 +265,76 @@ class TLEDBLEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return len(mac_clean) == 12 and all(c in "0123456789ABCDEF" for c in mac_clean)
         except:
             return False
+
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """创建选项流程用于管理子设备"""
+        return TLEDBLEOptionsFlow(config_entry)
+
+
+class TLEDBLEOptionsFlow(config_entries.OptionsFlow):
+    """TLED BLE设备的选项配置流程，用于管理子设备"""
+    
+    def __init__(self, config_entry: ConfigEntry):
+        self.subdevices = config_entry.options.get("subdevices", {})
+
+    async def async_step_init(self, user_input=None) -> FlowResult:
+        """管理子设备列表"""
+        errors = {}
+        
+        if user_input is not None:
+            # 解析用户输入的子设备列表
+            new_subdevices = self.subdevices.copy()
+            raw_entries = user_input.get("subdevices", "").strip().split("\n")
+            for entry in raw_entries:
+                if not entry.strip():
+                    continue
+                try:
+                    name, addr_str = entry.split(":", 1)
+                    name = name.strip()
+                    addr = int(addr_str.strip(), 16)  # 转换为十六进制整数
+                    
+                    if not name:
+                        raise ValueError("名称不能为空")
+                    if addr < 0x0001 or addr > 0xFF00:
+                        raise ValueError("地址必须是0x0001-0xFF00之间的十六进制数")
+                    
+                    # 关键：保留现有状态（如果存在），仅更新名称
+                    existing_state = new_subdevices.get(addr, {}).get("state", {"on": False, "brightness": 0})
+                    new_subdevices[addr] = {
+                        "name": name,
+                        "state": existing_state
+                    }
+                except ValueError as e:
+                    errors["base"] = f"格式错误: {str(e)} (正确格式: 名称:十六进制地址，如 电视柜:0003)"
+                    break
+            
+            if not errors:
+                self.subdevices = new_subdevices
+                # 保存配置并重新加载集成
+                return self.async_create_entry(
+                    title="",
+                    data={"subdevices": self.subdevices}
+                )
+
+        # 格式化现有子设备为文本显示
+        subdevices_text = "\n".join(
+            [f"{info['name']}:{addr:04X}" for addr, info in self.subdevices.items()]
+        )
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema({
+                vol.Required(
+                    "subdevices", 
+                    default=subdevices_text,
+                    description={
+                        "help": "每行输入一个子设备，格式：名称:十六进制地址（如 电视柜:0003）\n"
+                                "地址范围：0001-FF00\n"
+                                "⚠️ 新增设备时，可直接追加到现有条目后（无需重新输入旧设备）\n"
+                                "提示：按 Enter 键可换行添加多个设备"
+                    }
+                ): str  # 使用原生str类型，依赖用户手动换行
+            }),
+            errors=errors
+        )
