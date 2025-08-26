@@ -156,7 +156,7 @@ class TLEDBLELight(LightEntity):
     async def async_turn_off(self,** kwargs):
         """Turn off the light."""
         success = await self.controller.send_control_command(
-            self.address, False, 0
+            self.address, False, self._brightness
         )
         
         if success:
