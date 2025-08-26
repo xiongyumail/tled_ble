@@ -133,6 +133,11 @@ class TLEDBLELight(LightEntity):
         """返回支持的颜色模式集合"""
         return {ColorMode.BRIGHTNESS}
 
+    @property
+    def icon(self):
+        """返回实体图标"""
+        return "mdi:lightbulb-group"
+
     async def async_turn_on(self, **kwargs):
         """Turn on the light or adjust brightness."""
         is_on = True

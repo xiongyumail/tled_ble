@@ -1,12 +1,13 @@
 {
   "domain": "tled_ble",
   "name": "TLED BLE Mesh",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "config_flow": true,
   "documentation": "",
   "requirements": ["bleak>=0.19.5"],
   "dependencies": [],
   "codeowners": ["@xiongyu"],
   "iot_class": "local_polling",
-  "components": ["light", "text"]
+  "components": ["light", "text"],
+  "icon": "mdi:lightbulb-group"
 }

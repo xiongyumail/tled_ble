@@ -43,6 +43,11 @@ class TLEDBLEDebugWrite(TextEntity):
             manufacturer=MANUFACTURER,
         )
 
+    @property
+    def icon(self):
+        """返回实体图标"""
+        return "mdi:console"
+
     async def async_set_value(self, value: str) -> None:
         """Send input hex command to device."""
         try:
