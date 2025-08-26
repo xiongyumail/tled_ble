@@ -1,0 +1,6 @@
+{
+  "name": "TLED BLE Mesh",
+  "content_in_root": false,
+  "domains": ["tled_ble"],
+  "homeassistant": "2023.1.0"
+}
