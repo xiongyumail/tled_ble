@@ -319,7 +319,8 @@ class TLEDBLEOptionsFlow(config_entries.OptionsFlow):
 
         # 格式化现有子设备为文本显示
         subdevices_text = "\n".join(
-            [f"{info['name']}:{addr:04X}" for addr, info in self.subdevices.items()]
+            [f"{info['name']}:{int(addr, 16):04X}" if isinstance(addr, str) else f"{info['name']}:{addr:04X}" 
+            for addr, info in self.subdevices.items()]
         )
 
         return self.async_show_form(
