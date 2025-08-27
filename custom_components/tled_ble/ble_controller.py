@@ -31,104 +31,166 @@ class TLEDBLEController:
         self.base_timeout = 15.0  # 基础超时时间（秒）
         self.subdevices = {}  # 存储子设备状态 {地址: {name, state}}
         self.config_entry = None  # 配置条目引用
+        self._connection_lock = asyncio.Lock()  # 连接操作锁，避免并发冲突
+        self._heartbeat_task: Optional[asyncio.Task] = None  # 心跳任务
+        self._reconnect_task: Optional[asyncio.Task] = None  # 重连任务
+        self.keep_alive_interval = 30  # 心跳间隔（秒）
 
     async def connect(self, timeout: Optional[float] = None, retries: Optional[int] = None) -> bool:
         """连接到BLE设备"""
-        timeout = timeout or self.base_timeout
-        retries = retries or self.max_retries
-        
-        for attempt in range(retries):
-            try:
-                _LOGGER.info(
-                    f"尝试连接到设备 {self.device_address}（尝试 {attempt+1}/{retries}），超时时间: {timeout}秒"
-                )
-                
-                # 如果已有客户端实例，先确保断开连接
-                if self.client and self.client.is_connected:
-                    await self.disconnect()
-                
-                # 创建新的客户端实例
-                self.client = BleakClient(self.device_address)
-                
-                # 尝试连接
-                _LOGGER.debug(f"发起连接请求到 {self.device_address}")
-                await self.client.connect(timeout=timeout)
-                
-                if self.client.is_connected:
-                    self.connected = True
-                    _LOGGER.info(f"成功连接到设备 {self.device_address}")
-                    return True
-                
-                _LOGGER.warning(f"连接尝试 {attempt+1} 未成功建立连接")
-                
-            except TimeoutError:
-                _LOGGER.warning(
-                    f"连接过程超时（尝试 {attempt+1}/{retries}），超时时间: {timeout}秒"
-                )
-            except BleakError as e:
-                _LOGGER.error(
-                    f"连接过程发生BLE错误（尝试 {attempt+1}/{retries}）: {str(e)}"
-                )
-            except Exception as e:
-                _LOGGER.exception(
-                    f"连接过程发生意外错误（尝试 {attempt+1}/{retries}）: {str(e)}"
-                )
+        async with self._connection_lock:  # 确保连接操作互斥
+            timeout = timeout or self.base_timeout
+            retries = retries or self.max_retries
             
-            # 指数退避重试
-            if attempt < retries - 1:
-                wait_time = min(5 * (attempt + 1), 30)
-                _LOGGER.info(f"等待 {wait_time} 秒后进行下一次连接尝试")
-                await asyncio.sleep(wait_time)
-        
-        self.connected = False
-        _LOGGER.error(f"所有 {retries} 次连接尝试均失败")
-        return False
+            for attempt in range(retries):
+                try:
+                    _LOGGER.info(
+                        f"尝试连接到设备 {self.device_address}（尝试 {attempt+1}/{retries}），超时时间: {timeout}秒"
+                    )
+                    
+                    # 如果已有客户端实例，先确保断开连接
+                    if self.client and self.client.is_connected:
+                        await self.disconnect()
+                    
+                    # 创建新的客户端实例
+                    self.client = BleakClient(self.device_address)
+                    
+                    # 尝试连接
+                    _LOGGER.debug(f"发起连接请求到 {self.device_address}")
+                    await self.client.connect(timeout=timeout)
+                    
+                    if self.client.is_connected:
+                        self.connected = True
+                        _LOGGER.info(f"成功连接到设备 {self.device_address}")
+                        # 启动心跳任务
+                        self._start_heartbeat()
+                        # 注册连接断开回调
+                        self.client.set_disconnected_callback(self._on_disconnected)
+                        return True
+                    
+                    _LOGGER.warning(f"连接尝试 {attempt+1} 未成功建立连接")
+                    
+                except TimeoutError:
+                    _LOGGER.warning(
+                        f"连接过程超时（尝试 {attempt+1}/{retries}），超时时间: {timeout}秒"
+                    )
+                except BleakError as e:
+                    _LOGGER.error(
+                        f"连接过程发生BLE错误（尝试 {attempt+1}/{retries}）: {str(e)}"
+                    )
+                except Exception as e:
+                    _LOGGER.exception(
+                        f"连接过程发生意外错误（尝试 {attempt+1}/{retries}）: {str(e)}"
+                    )
+                
+                # 指数退避重试
+                if attempt < retries - 1:
+                    wait_time = min(5 * (attempt + 1), 30)
+                    _LOGGER.info(f"等待 {wait_time} 秒后进行下一次连接尝试")
+                    await asyncio.sleep(wait_time)
+            
+            self.connected = False
+            _LOGGER.error(f"所有 {retries} 次连接尝试均失败")
+            return False
 
     async def disconnect(self) -> None:
-        """断开与设备的连接"""
-        if self.client and self.client.is_connected:
-            try:
-                _LOGGER.info(f"断开与设备 {self.device_address} 的连接")
-                await self.client.disconnect()
-            except Exception as e:
-                _LOGGER.error(f"断开连接时发生错误: {str(e)}")
-        self.connected = False
-        self.client = None
+        """断开与设备的连接并清理资源"""
+        async with self._connection_lock:
+            self._stop_heartbeat()  # 停止心跳
+            if self._reconnect_task and not self._reconnect_task.done():
+                self._reconnect_task.cancel()
+                self._reconnect_task = None
 
-    async def auto_reconnect(self) -> bool:
-        """自动重连逻辑"""
-        _LOGGER.info(f"启动自动重连到设备 {self.device_address}")
-        
-        for attempt in range(1, self.max_retries + 1):
-            timeout = min(self.base_timeout + (attempt * 5), 60.0)
+            if self.client and self.client.is_connected:
+                try:
+                    _LOGGER.info(f"断开与设备 {self.device_address} 的连接")
+                    await self.client.disconnect()
+                except Exception as e:
+                    _LOGGER.error(f"断开连接时发生错误: {str(e)}")
+            
+            self.connected = False
+            self.client = None
+
+    def _on_disconnected(self, client: BleakClient) -> None:
+        """连接断开时的回调处理"""
+        if self.connected:
+            _LOGGER.warning(f"与设备 {self.device_address} 的连接意外断开")
+            self.connected = False
+            # 停止心跳任务
+            self._stop_heartbeat()
+            # 触发自动重连（避免重复创建任务）
+            if not self._reconnect_task or self._reconnect_task.done():
+                self._reconnect_task = self.hass.loop.create_task(self._persistent_reconnect())
+
+    async def _persistent_reconnect(self) -> None:
+        """持续重连直到成功，带指数退避策略"""
+        attempt = 0
+        while not self.connected and self.hass.is_running:
+            attempt += 1
+            timeout = min(self.base_timeout + (attempt * 5), 60.0)  # 最大超时60秒
+            wait_time = min(2 **attempt, 60)  # 指数退避，最大等待60秒
+
+            _LOGGER.info(
+                f"持久化重连尝试 {attempt} - 设备 {self.device_address}, "
+                f"超时 {timeout}s, 下次重试等待 {wait_time}s"
+            )
+
             if await self.connect(timeout=timeout, retries=1):
-                return True
-                
-            wait_time = min(attempt * 10, 60)
-            _LOGGER.info(f"自动重连尝试 {attempt} 失败，将在 {wait_time} 秒后重试")
+                _LOGGER.info(f"持久化重连成功 - 设备 {self.device_address}")
+                return
+
             await asyncio.sleep(wait_time)
-        
-        _LOGGER.error(f"所有自动重连尝试均失败，无法连接到 {self.device_address}")
-        return False
+
+    def _start_heartbeat(self) -> None:
+        """启动心跳任务"""
+        if self._heartbeat_task and not self._heartbeat_task.done():
+            return
+
+        async def heartbeat_loop():
+            while self.connected and self.hass.is_running:
+                try:
+                    # 发送心跳命令（根据设备协议调整，示例为0xA5+0x00的空操作帧）
+                    heartbeat_cmd = bytearray([HEADER, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+                    await self.send_command(heartbeat_cmd)
+                    _LOGGER.debug(f"已发送心跳包到 {self.device_address}")
+                except Exception as e:
+                    _LOGGER.warning(f"心跳发送失败: {str(e)}, 将触发重连")
+                    self.connected = False
+                    self._stop_heartbeat()
+                    if not self._reconnect_task or self._reconnect_task.done():
+                        self._reconnect_task = self.hass.loop.create_task(self._persistent_reconnect())
+                    break  # 退出本轮心跳，等待重连后再启动
+
+                # 等待下一次心跳间隔
+                await asyncio.sleep(self.keep_alive_interval)
+
+        self._heartbeat_task = self.hass.loop.create_task(heartbeat_loop())
+
+    def _stop_heartbeat(self) -> None:
+        """停止心跳任务"""
+        if self._heartbeat_task and not self._heartbeat_task.done():
+            self._heartbeat_task.cancel()
+            self._heartbeat_task = None
 
     async def send_command(self, command: bytes) -> bool:
-        """向设备发送原始命令"""
-        if not self.connected or not self.client or not self.client.is_connected:
-            _LOGGER.warning("发送命令失败：未连接到设备，尝试重连")
-            if not await self.auto_reconnect():
-                return False
-        
-        try:
-            # 确保没有其他操作在进行
-            if self.client.is_connected:
+        """向设备发送原始命令（增强版）"""
+        async with self._connection_lock:  # 确保发送操作互斥
+            if not self.connected or not self.client or not self.client.is_connected:
+                _LOGGER.warning("发送命令失败：未连接到设备，等待重连")
+                return False  # 由重连任务负责恢复连接，避免在这里嵌套重连
+            
+            try:
                 await self.client.write_gatt_char(self.char_uuid, command)
                 _LOGGER.debug(f"成功发送命令到 {self.device_address}: {command.hex()}")
                 return True
-            return False
-        except Exception as e:
-            _LOGGER.error(f"发送命令时发生错误: {str(e)}")
-            self.connected = False
-            return False
+            except Exception as e:
+                _LOGGER.error(f"发送命令时发生错误: {str(e)}")
+                self.connected = False
+                self._stop_heartbeat()
+                # 触发重连
+                if not self._reconnect_task or self._reconnect_task.done():
+                    self._reconnect_task = self.hass.loop.create_task(self._persistent_reconnect())
+                return False
 
     async def send_control_command(self, address: int, is_on: bool, brightness: int) -> bool:
         """发送灯光控制命令（修正：确保地址为整数类型）"""
