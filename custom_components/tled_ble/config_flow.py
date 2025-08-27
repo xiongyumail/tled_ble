@@ -283,12 +283,17 @@ class TLEDBLEOptionsFlow(config_entries.OptionsFlow):
         errors = {}
         
         if user_input is not None:
-            # 解析用户输入的子设备列表
+            # 解析用户输入的子设备列表，支持逗号、分号和换行分割
             new_subdevices = self.subdevices.copy()
-            raw_entries = user_input.get("subdevices", "").strip().split("\n")
+            raw_input = user_input.get("subdevices", "").strip()
+            
+            # 使用逗号、分号或换行分割输入
+            separators = [',', ';', '\n']
+            for sep in separators:
+                raw_input = raw_input.replace(sep, '|')  # 统一替换为临时分隔符
+            raw_entries = [entry.strip() for entry in raw_input.split('|') if entry.strip()]
+            
             for entry in raw_entries:
-                if not entry.strip():
-                    continue
                 try:
                     name, addr_str = entry.split(":", 1)
                     name = name.strip()
@@ -299,7 +304,7 @@ class TLEDBLEOptionsFlow(config_entries.OptionsFlow):
                     if addr < 0x0001 or addr > 0xFF00:
                         raise ValueError("地址必须是0x0001-0xFF00之间的十六进制数")
                     
-                    # 关键：保留现有状态（如果存在），仅更新名称
+                    # 保留现有状态（如果存在），仅更新名称
                     existing_state = new_subdevices.get(addr, {}).get("state", {"on": False, "brightness": 0})
                     new_subdevices[addr] = {
                         "name": name,
@@ -317,8 +322,8 @@ class TLEDBLEOptionsFlow(config_entries.OptionsFlow):
                     data={"subdevices": self.subdevices}
                 )
 
-        # 格式化现有子设备为文本显示
-        subdevices_text = "\n".join(
+        # 格式化现有子设备为文本显示（使用逗号分隔）
+        subdevices_text = ", ".join(
             [f"{info['name']}:{int(addr, 16):04X}" if isinstance(addr, str) else f"{info['name']}:{addr:04X}" 
             for addr, info in self.subdevices.items()]
         )
@@ -330,12 +335,12 @@ class TLEDBLEOptionsFlow(config_entries.OptionsFlow):
                     "subdevices", 
                     default=subdevices_text,
                     description={
-                        "help": "每行输入一个子设备，格式：名称:十六进制地址（如 电视柜:0003）\n"
+                        "help": "输入子设备，格式：名称:十六进制地址（如 电视柜:0003）\n"
                                 "地址范围：0001-FF00\n"
-                                "⚠️ 新增设备时，可直接追加到现有条目后（无需重新输入旧设备）\n"
-                                "提示：按 Enter 键可换行添加多个设备"
+                                "⚠️ 多个设备可用逗号(,)、分号(;)或换行分隔\n"
+                                "提示：新增设备时，可直接追加到现有条目后（无需重新输入旧设备）"
                     }
-                ): str  # 使用原生str类型，依赖用户手动换行
+                ): str
             }),
             errors=errors
         )
