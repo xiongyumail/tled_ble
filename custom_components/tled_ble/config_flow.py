@@ -195,20 +195,37 @@ class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             if device_address.startswith('dev_'):
                 device_address = device_address.replace('dev_', '').replace('_', ':')
             
-            # 使用修正后的地址连接设备
-            async with BleakClient(device_address) as client:
-                _LOGGER.info(f"已连接到 {device_address}，正在扫描服务...")
-                services = client.services
-                self.device_services = {}
-                
-                for service in services:
-                    characteristics = []
-                    for char in service.characteristics:
-                        if char.properties:
-                            props = ",".join(char.properties)
-                            characteristics.append({"uuid": char.uuid, "properties": props})
-                    if characteristics:
-                        self.device_services[service.uuid] = characteristics
+            _LOGGER.info(f"准备连接到 {device_address} 获取服务...")
+            
+            # 简单的重试逻辑
+            for attempt in range(3):
+                try:
+                    # 在连接前稍微等待，避免与扫描冲突，给蓝牙适配器喘息时间
+                    await asyncio.sleep(1.0)
+                    
+                    # 使用扫描到的 device 对象连接通常比直接用地址更稳定
+                    # 增加超时时间到 25 秒
+                    async with BleakClient(self.selected_device, timeout=25.0) as client:
+                        _LOGGER.info(f"已连接到 {device_address}，正在扫描服务...")
+                        services = client.services
+                        self.device_services = {}
+                        
+                        for service in services:
+                            characteristics = []
+                            for char in service.characteristics:
+                                if char.properties:
+                                    props = ",".join(char.properties)
+                                    characteristics.append({"uuid": char.uuid, "properties": props})
+                            if characteristics:
+                                self.device_services[service.uuid] = characteristics
+                        
+                        # 成功获取后跳出循环
+                        break
+                except Exception as connect_error:
+                    _LOGGER.warning(f"连接获取服务尝试 {attempt+1}/3 失败: {str(connect_error)}")
+                    if attempt == 2:
+                        raise connect_error
+                    await asyncio.sleep(2.0)
             
             if not self.device_services:
                 return self.async_show_form(
