@@ -10,6 +10,7 @@ from homeassistant.exceptions import HomeAssistantError
 from .const import (
     HEADER,
     CONTROL_CMD,
+    QUERY_CMD,
     DOMAIN
 )
 
@@ -114,6 +115,13 @@ class TLEDBLEController:
                         self._start_heartbeat()
                         # 注册连接断开回调
                         self.client.set_disconnected_callback(self._on_disconnected)
+                        
+                        # 连接建立后，主动查询所有子设备状态
+                        for addr in self.subdevices:
+                            self.hass.loop.create_task(self.send_query_command(addr))
+                            # 稍微错开一点时间，避免瞬时拥塞
+                            await asyncio.sleep(0.1)
+
                         return True
                     
                     _LOGGER.warning(f"连接尝试 {attempt+1} 未成功建立连接")
@@ -277,6 +285,26 @@ class TLEDBLEController:
                 if not self._reconnect_task or self._reconnect_task.done():
                     self._reconnect_task = self.hass.loop.create_task(self._persistent_reconnect())
                 return False
+
+    async def send_query_command(self, address: int) -> bool:
+        """发送状态查询命令"""
+        if isinstance(address, str):
+            try:
+                address = int(address, 16)
+            except ValueError:
+                return False
+        
+        # 构建命令帧 [Header, AddrL, AddrH, OpH, OpL, 0x00, 0x00]
+        cmd_frame = bytearray([
+            HEADER,
+            address & 0xFF,
+            (address >> 8) & 0xFF,
+            (QUERY_CMD >> 8) & 0xFF,
+            QUERY_CMD & 0xFF,
+            0x00,
+            0x00,
+        ])
+        return await self.send_command(cmd_frame)
 
     async def send_control_command(self, address: int, is_on: bool, brightness: int) -> bool:
         """发送灯光控制命令（修正：确保地址为整数类型）"""
