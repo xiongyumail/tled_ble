@@ -1,0 +1,45 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "TLED BLE 配置",
+                "description": "请选择配置方式："
+            },
+            "bluetooth_confirm": {
+                "title": "发现新设备",
+                "description": "发现 TLED 设备：{name}\nMAC 地址：{address}\n\n是否要配置此设备？"
+            },
+            "select_service": {
+                "title": "选择服务",
+                "description": "正在配置设备 {device}。请选择服务和特征值。\n如果未自动匹配，请手动选择。"
+            },
+            "manual": {
+                "title": "手动配置",
+                "description": "请输入设备的 MAC 地址和 UUID 信息。"
+            },
+            "scan": {
+                "title": "扫描设备",
+                "description": "请从列表中选择要添加的设备。"
+            }
+        },
+        "error": {
+            "cannot_connect": "无法连接",
+            "no_devices_found": "未找到设备",
+            "scan_failed": "扫描失败",
+            "service_scan_failed": "服务扫描失败",
+            "invalid_mac": "无效的 MAC 地址"
+        },
+        "abort": {
+            "already_configured": "设备已配置",
+            "no_devices_found": "未找到设备"
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "配置子设备",
+                "description": "管理此控制器的子设备列表。"
+            }
+        }
+    }
+}

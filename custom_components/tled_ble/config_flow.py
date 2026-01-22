@@ -41,6 +41,35 @@ class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             })
         )
 
+    async def async_step_bluetooth(self, discovery_info) -> FlowResult:
+        """处理蓝牙自动发现"""
+        await self.async_set_unique_id(discovery_info.address)
+        self._abort_if_unique_id_configured()
+        
+        # 保存设备信息
+        self.selected_device = discovery_info.device
+        
+        # 更新上下文标题，使其在发现卡片中显示 MAC 地址
+        self.context["title_placeholders"] = {
+            "name": f"{discovery_info.name} ({discovery_info.address})"
+        }
+        
+        return await self.async_step_bluetooth_confirm()
+
+    async def async_step_bluetooth_confirm(self, user_input=None) -> FlowResult:
+        """确认蓝牙设备"""
+        if user_input is not None:
+            return await self.async_step_select_service()
+
+        self._set_confirm_only()
+        return self.async_show_form(
+            step_id="bluetooth_confirm",
+            description_placeholders={
+                "name": self.selected_device.name,
+                "address": self.selected_device.address
+            }
+        )
+
     async def async_step_scan(self, user_input=None) -> FlowResult:
         """扫描并显示BLE设备，包含信号强度"""
         # 如果用户已选择设备，处理选择结果
