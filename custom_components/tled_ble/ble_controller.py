@@ -62,6 +62,14 @@ class TLEDBLEController:
                     if self.client.is_connected:
                         self.connected = True
                         _LOGGER.info(f"成功连接到设备 {self.device_address}")
+                        
+                        # 启动通知监听
+                        try:
+                            await self.client.start_notify(self.char_uuid, self._notification_handler)
+                            _LOGGER.info(f"成功订阅通知: {self.char_uuid}")
+                        except Exception as e:
+                            _LOGGER.warning(f"订阅通知失败: {str(e)}")
+
                         # 启动心跳任务
                         self._start_heartbeat()
                         # 注册连接断开回调
@@ -121,6 +129,32 @@ class TLEDBLEController:
             # 触发自动重连（避免重复创建任务）
             if not self._reconnect_task or self._reconnect_task.done():
                 self._reconnect_task = self.hass.loop.create_task(self._persistent_reconnect())
+
+    def _notification_handler(self, sender: int, data: bytearray):
+        """处理来自设备的通知数据"""
+        # 数据格式: [Header(0xA5), AddrL, AddrH, OpH, OpL, OnOff, Brightness]
+        if len(data) < 7 or data[0] != HEADER:
+            return
+            
+        # 解析地址
+        address = data[1] + (data[2] << 8)
+        
+        # 解析状态
+        is_on = data[5] != 0
+        brightness = data[6]
+        
+        _LOGGER.debug(f"收到通知: 地址={address}, 开关={is_on}, 亮度={brightness}")
+        
+        # 更新状态
+        if address in self.subdevices:
+            self.subdevices[address]["state"] = {
+                "on": is_on,
+                "brightness": brightness
+            }
+            self.hass.bus.async_fire(
+                f"{DOMAIN}_subdevice_updated",
+                {"address": address, "state": self.subdevices[address]["state"]}
+            )
 
     async def _persistent_reconnect(self) -> None:
         """持续重连直到成功，带指数退避策略"""
