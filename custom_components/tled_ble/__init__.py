@@ -26,7 +26,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     controller = TLEDBLEController(hass, mac, service_uuid, char_uuid)
     controller.name = name
     controller.config_entry = entry  # 保存配置条目引用
-    controller.subdevices = entry.options.get("subdevices", {})  # 加载子设备配置
+    
+    # 加载子设备配置并确保地址为整数类型
+    raw_subdevices = entry.options.get("subdevices", {})
+    subdevices = {}
+    for k, v in raw_subdevices.items():
+        try:
+            subdevices[int(k)] = v
+        except (ValueError, TypeError):
+             _LOGGER.warning(f"Ignored invalid subdevice address: {k}")
+    controller.subdevices = subdevices
     
     hass.data[DOMAIN][mac] = controller
     

@@ -24,6 +24,7 @@ class TLEDBLEController:
         self.mac_address = device_address
         self.service_uuid = service_uuid      # 服务UUID
         self.char_uuid = char_uuid            # 特征值UUID
+        self.notify_uuid = None               # 自动发现的 Notify UUID
         self.name = ""  # 设备名称（从配置中获取）
         self.client: Optional[BleakClient] = None
         self.connected = False
@@ -65,8 +66,37 @@ class TLEDBLEController:
                         
                         # 启动通知监听
                         try:
-                            await self.client.start_notify(self.char_uuid, self._notification_handler)
-                            _LOGGER.info(f"成功订阅通知: {self.char_uuid}")
+                            # 1. 确定用于通知的 UUID
+                            target_notify_uuid = None
+                            
+                            # 获取服务对象
+                            service = self.client.services.get_service(self.service_uuid)
+                            if service:
+                                # 遍历服务下的特征值，寻找支持 notify 的
+                                for char in service.characteristics:
+                                    if "notify" in char.properties:
+                                        target_notify_uuid = char.uuid
+                                        # 如果找到的正好是配置的 UUID，优先使用
+                                        if char.uuid == self.char_uuid:
+                                            break
+                            
+                            # 如果服务里没找到，或者是通过 UUID 直接连接的某些特殊情况，回退尝试配置的 UUID
+                            if not target_notify_uuid:
+                                char = self.client.services.get_characteristic(self.char_uuid)
+                                if char and "notify" in char.properties:
+                                    target_notify_uuid = self.char_uuid
+
+                            # 2. 执行订阅
+                            if target_notify_uuid:
+                                await self.client.start_notify(target_notify_uuid, self._notification_handler)
+                                self.notify_uuid = target_notify_uuid
+                                _LOGGER.info(f"成功订阅通知 UUID: {target_notify_uuid} (配置的读写 UUID: {self.char_uuid})")
+                            else:
+                                _LOGGER.warning(f"在服务 {self.service_uuid} 下未找到支持 Notify 的特征值，尝试使用配置 UUID")
+                                # 最后的尝试
+                                await self.client.start_notify(self.char_uuid, self._notification_handler)
+                                self.notify_uuid = self.char_uuid
+                                
                         except Exception as e:
                             _LOGGER.warning(f"订阅通知失败: {str(e)}")
 

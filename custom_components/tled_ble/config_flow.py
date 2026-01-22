@@ -71,6 +71,10 @@ class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             for device, adv_data in devices.values():
                 # 筛选名称包含特定前缀的设备
                 if device.name and DEVICE_NAME_PREFIX.lower() in device.name.lower():
+                    # 过滤掉 RSSI 为 -127 的无效设备（通常是失效缓存）
+                    if adv_data.rssi <= -100:
+                        continue
+
                     self.discovered_devices.append(device)
                     _LOGGER.info(
                         f"发现TLED设备: {device.name} ({device.address}), "
@@ -127,6 +131,20 @@ class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors={"base": "scan_failed"}
             )
 
+    def _get_best_write_char(self, service_uuid):
+        """获取服务中最适合写入的特征值UUID"""
+        chars = self.device_services.get(service_uuid, [])
+        # 1. 优先找支持 Write 的
+        for char in chars:
+            if "write" in char["properties"].lower():
+                return char["uuid"]
+        # 2. 其次找 Write Without Response
+        for char in chars:
+            if "write-without-response" in char["properties"].lower() or "write_no_response" in char["properties"].lower():
+                return char["uuid"]
+        # 3. 都没有，返回列表第一个
+        return chars[0]["uuid"] if chars else ""
+
     async def async_step_select_service(self, user_input=None) -> FlowResult:
         """选择设备的Service和Characteristic UUID（支持动态更新特征值）"""
         if user_input is not None:
@@ -134,15 +152,15 @@ class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             selected_service = user_input["service_uuid"]
             
             # 如果用户刚选择完服务，重新渲染表单以更新特征值选项
-            if "char_uuid" not in user_input or user_input["char_uuid"] not in [
-                char["uuid"] for char in self.device_services.get(selected_service, [])
-            ]:
+            current_service_chars = [c["uuid"] for c in self.device_services.get(selected_service, [])]
+            
+            if "char_uuid" not in user_input or user_input["char_uuid"] not in current_service_chars:
                 # 获取选中服务的特征值
                 char_options = [(char["uuid"], f"Characteristic: {char['uuid']} ({char['properties']})") 
                             for char in self.device_services.get(selected_service, [])]
                 
-                # 默认选择第一个特征值
-                first_char = char_options[0][0] if char_options else ""
+                # 智能选择默认特征值
+                default_char = self._get_best_write_char(selected_service)
                 
                 return self.async_show_form(
                     step_id="select_service",
@@ -150,7 +168,7 @@ class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                         vol.Required("service_uuid", default=selected_service): vol.In(
                             {uuid: f"Service: {uuid}" for uuid in self.device_services.keys()}
                         ),
-                        vol.Required("char_uuid", default=first_char): vol.In(dict(char_options))
+                        vol.Required("char_uuid", default=default_char): vol.In(dict(char_options))
                     }),
                     description_placeholders={"device": self.selected_device.address}
                 )
@@ -205,13 +223,15 @@ class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             # 初始特征值选项（第一个服务）
             char_options = [(char["uuid"], f"Characteristic: {char['uuid']} ({char['properties']})") 
                         for char in self.device_services[first_service]]
-            first_char = char_options[0][0] if char_options else ""
+            
+            # 智能选择默认特征值
+            default_char = self._get_best_write_char(first_service)
             
             return self.async_show_form(
                 step_id="select_service",
                 data_schema=vol.Schema({
                     vol.Required("service_uuid", default=first_service): vol.In(service_options),
-                    vol.Required("char_uuid", default=first_char): vol.In(dict(char_options))
+                    vol.Required("char_uuid", default=default_char): vol.In(dict(char_options))
                 }),
                 description_placeholders={"device": self.selected_device.address}
             )
