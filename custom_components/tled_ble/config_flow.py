@@ -11,7 +11,7 @@ from bleak import BleakScanner, BleakClient
 from bleak.backends.device import BLEDevice
 from bleak.backends.characteristic import BleakGATTCharacteristic
 
-from .const import DOMAIN, MANUFACTURER, DEVICE_NAME_PREFIX
+from .const import DOMAIN, MANUFACTURER, DEVICE_NAME_PREFIX, DEFAULT_SERVICE_UUID, DEFAULT_CHAR_UUID
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -236,6 +236,61 @@ class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                     step_id="select_service",
                     errors={"base": "no_services_found"}
                 )
+
+            # === 自动匹配默认 UUID (增强版) ===
+            _LOGGER.info(f"发现的服务: {list(self.device_services.keys())}")
+            
+            found_service = None
+            found_char = None
+            
+            # 1. 查找服务
+            # 尝试精确匹配 (忽略大小写)
+            for uuid in self.device_services:
+                if uuid.lower() == DEFAULT_SERVICE_UUID.lower():
+                    found_service = uuid
+                    break
+            
+            # 如果没找到，尝试模糊匹配 (找包含 ffe0 的服务)
+            if not found_service:
+                for uuid in self.device_services:
+                    if "ffe0" in uuid.lower():
+                        found_service = uuid
+                        break
+            
+            if found_service:
+                # 2. 查找特征值
+                service_chars = self.device_services[found_service]
+                # 尝试精确匹配 (忽略大小写)
+                for char in service_chars:
+                    if char["uuid"].lower() == DEFAULT_CHAR_UUID.lower():
+                        found_char = char["uuid"]
+                        break
+                
+                # 如果没找到，尝试模糊匹配 (找包含 ffe1 且可写)
+                if not found_char:
+                    for char in service_chars:
+                        props = char["properties"].lower()
+                        if "ffe1" in char["uuid"].lower() and ("write" in props):
+                            found_char = char["uuid"]
+                            break
+
+            if found_service and found_char:
+                _LOGGER.info(f"自动匹配到服务 {found_service} 和特征值 {found_char}，跳过手动选择。")
+                
+                await self.async_set_unique_id(self.selected_device.address)
+                self._abort_if_unique_id_configured()
+                
+                device_name = self.selected_device.name or f"TLED Device {self.selected_device.address[-5:]}"
+                return self.async_create_entry(
+                    title=device_name,
+                    data={
+                        CONF_MAC: self.selected_device.address,
+                        CONF_NAME: device_name,
+                        "service_uuid": found_service,
+                        "char_uuid": found_char
+                    }
+                )
+            # =======================
             
             # 服务选项
             service_options = {uuid: f"Service: {uuid}" for uuid in self.device_services.keys()}

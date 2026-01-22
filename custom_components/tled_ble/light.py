@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, MANUFACTURER, BROADCAST_ADDR
+from .const import DOMAIN, MANUFACTURER
 from .ble_controller import TLEDBLEController
 
 _LOGGER = logging.getLogger(__name__)
@@ -31,9 +31,6 @@ async def async_setup_entry(
     # 添加已配置的子设备
     for addr, info in controller.subdevices.items():
         entities.append(TLEDBLELight(controller, addr, info["name"]))
-    
-    # 添加广播控制实体（控制所有设备）
-    entities.append(TLEDBLELight(controller, int(BROADCAST_ADDR), "All TLED Devices"))
     
     async_add_entities(entities)
 
