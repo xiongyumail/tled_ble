@@ -147,6 +147,7 @@ class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_select_service(self, user_input=None) -> FlowResult:
         """选择设备的Service和Characteristic UUID（支持动态更新特征值）"""
+        _LOGGER.info("正在执行新版服务发现流程 (v2026.01.22)...")
         if user_input is not None:
             # 检查是否仅选择了服务（需要更新特征值列表）
             selected_service = user_input["service_uuid"]
@@ -197,16 +198,21 @@ class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             
             _LOGGER.info(f"准备连接到 {device_address} 获取服务...")
             
-            # 简单的重试逻辑
-            for attempt in range(3):
+            # 混合重试策略：先试 device 对象，不行再试 address 字符串
+            # 缩短超时时间，避免界面卡死
+            connect_strategies = [
+                (self.selected_device, "设备对象"),
+                (device_address, "MAC地址")
+            ]
+            
+            for target, method_name in connect_strategies:
                 try:
-                    # 在连接前稍微等待，避免与扫描冲突，给蓝牙适配器喘息时间
-                    await asyncio.sleep(1.0)
+                    _LOGGER.info(f"尝试使用 {method_name} 连接...")
+                    await asyncio.sleep(0.5) # 短暂缓冲
                     
-                    # 使用扫描到的 device 对象连接通常比直接用地址更稳定
-                    # 增加超时时间到 25 秒
-                    async with BleakClient(self.selected_device, timeout=25.0) as client:
-                        _LOGGER.info(f"已连接到 {device_address}，正在扫描服务...")
+                    # 设置较短的超时 (12s)，避免长时间卡死
+                    async with BleakClient(target, timeout=12.0) as client:
+                        _LOGGER.info(f"已连接 ({method_name})，正在扫描服务...")
                         services = client.services
                         self.device_services = {}
                         
@@ -219,13 +225,11 @@ class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                             if characteristics:
                                 self.device_services[service.uuid] = characteristics
                         
-                        # 成功获取后跳出循环
+                        # 成功获取后立即跳出
                         break
-                except Exception as connect_error:
-                    _LOGGER.warning(f"连接获取服务尝试 {attempt+1}/3 失败: {str(connect_error)}")
-                    if attempt == 2:
-                        raise connect_error
-                    await asyncio.sleep(2.0)
+                except Exception as e:
+                    _LOGGER.warning(f"使用 {method_name} 连接失败: {str(e)}")
+                    continue # 尝试下一种策略
             
             if not self.device_services:
                 return self.async_show_form(
