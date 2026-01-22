@@ -263,7 +263,8 @@ class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             if not self.device_services:
                 return self.async_show_form(
                     step_id="select_service",
-                    errors={"base": "no_services_found"}
+                    errors={"base": "no_services_found"},
+                    description_placeholders={"device": self.selected_device.address}
                 )
 
             # === 自动匹配默认 UUID (增强版) ===
@@ -345,7 +346,8 @@ class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             _LOGGER.error(f"获取设备服务时出错: {str(e)}")
             return self.async_show_form(
                 step_id="select_service",
-                errors={"base": "service_scan_failed"}
+                errors={"base": "service_scan_failed"},
+                description_placeholders={"device": self.selected_device.address}
             )
 
     async def async_step_manual(self, user_input=None) -> FlowResult:
