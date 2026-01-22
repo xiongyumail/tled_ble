@@ -6,6 +6,14 @@
   "documentation": "",
   "requirements": ["bleak>=0.19.5"],
   "dependencies": [],
+  "bluetooth": [
+    {
+      "name": "TLED*"
+    },
+    {
+      "service_uuid": "0000ffe0-0000-1000-8000-00805f9b34fb"
+    }
+  ],
   "codeowners": ["@xiongyu"],
   "iot_class": "local_polling",
   "components": ["light", "text"],

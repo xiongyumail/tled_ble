@@ -3,7 +3,7 @@ import asyncio
 import logging
 from typing import Optional
 from bleak import BleakClient, BleakError
-from homeassistant.components.bluetooth import async_get_scanner
+from homeassistant.components.bluetooth import async_get_scanner, async_ble_device_from_address
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 
@@ -57,7 +57,14 @@ class TLEDBLEController:
                     await self._cleanup_client()
                     
                     # 创建新的客户端实例
-                    self.client = BleakClient(self.device_address)
+                    # 优化：优先从 HA 蓝牙管理器获取设备对象（这样可以自动支持 ESPHome 代理）
+                    ble_device = async_ble_device_from_address(self.hass, self.device_address, connectable=True)
+                    if ble_device:
+                        self.client = BleakClient(ble_device)
+                        _LOGGER.debug(f"通过 HA 蓝牙管理器连接到设备 (支持代理): {ble_device}")
+                    else:
+                        self.client = BleakClient(self.device_address)
+                        _LOGGER.warning(f"未在 HA 蓝牙缓存中找到设备，尝试直接使用地址连接: {self.device_address}")
                     
                     # 尝试连接
                     _LOGGER.debug(f"发起连接请求到 {self.device_address}")
