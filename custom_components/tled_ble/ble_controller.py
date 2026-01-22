@@ -40,6 +40,10 @@ class TLEDBLEController:
     async def connect(self, timeout: Optional[float] = None, retries: Optional[int] = None) -> bool:
         """连接到BLE设备"""
         async with self._connection_lock:  # 确保连接操作互斥
+            # 检查是否已连接
+            if self.connected and self.client and self.client.is_connected:
+                return True
+
             timeout = timeout or self.base_timeout
             retries = retries or self.max_retries
             
@@ -49,9 +53,8 @@ class TLEDBLEController:
                         f"尝试连接到设备 {self.device_address}（尝试 {attempt+1}/{retries}），超时时间: {timeout}秒"
                     )
                     
-                    # 如果已有客户端实例，先确保断开连接
-                    if self.client and self.client.is_connected:
-                        await self.disconnect()
+                    # 确保清理旧的连接状态
+                    await self._cleanup_client()
                     
                     # 创建新的客户端实例
                     self.client = BleakClient(self.device_address)
@@ -113,6 +116,12 @@ class TLEDBLEController:
                         f"连接过程超时（尝试 {attempt+1}/{retries}），超时时间: {timeout}秒"
                     )
                 except BleakError as e:
+                    error_msg = str(e)
+                    if "Operation already in progress" in error_msg or "br-connection-canceled" in error_msg:
+                        _LOGGER.warning(f"BLE操作繁忙或被取消，将在退避后重试: {error_msg}")
+                        # 遇到此类错误，额外增加等待时间，让 BlueZ 有时间清理
+                        await asyncio.sleep(2.0)
+                        
                     _LOGGER.error(
                         f"连接过程发生BLE错误（尝试 {attempt+1}/{retries}）: {str(e)}"
                     )
@@ -131,23 +140,29 @@ class TLEDBLEController:
             _LOGGER.error(f"所有 {retries} 次连接尝试均失败")
             return False
 
+    async def _cleanup_client(self):
+        """内部清理客户端资源（不加锁）"""
+        self._stop_heartbeat()
+        if self._reconnect_task and not self._reconnect_task.done():
+            self._reconnect_task.cancel()
+            self._reconnect_task = None
+
+        if self.client:
+            try:
+                # 尝试断开连接，无论当前状态如何
+                await self.client.disconnect()
+            except Exception as e:
+                _LOGGER.debug(f"清理连接时发生错误: {str(e)}")
+            finally:
+                self.client = None
+        
+        self.connected = False
+
     async def disconnect(self) -> None:
         """断开与设备的连接并清理资源"""
         async with self._connection_lock:
-            self._stop_heartbeat()  # 停止心跳
-            if self._reconnect_task and not self._reconnect_task.done():
-                self._reconnect_task.cancel()
-                self._reconnect_task = None
-
-            if self.client and self.client.is_connected:
-                try:
-                    _LOGGER.info(f"断开与设备 {self.device_address} 的连接")
-                    await self.client.disconnect()
-                except Exception as e:
-                    _LOGGER.error(f"断开连接时发生错误: {str(e)}")
-            
-            self.connected = False
-            self.client = None
+            _LOGGER.info(f"断开与设备 {self.device_address} 的连接")
+            await self._cleanup_client()
 
     def _on_disconnected(self, client: BleakClient) -> None:
         """连接断开时的回调处理"""
