@@ -63,6 +63,7 @@ class TLEDBLERSSISensor(SensorEntity):
         from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH
         return DeviceInfo(
             connections={(CONNECTION_BLUETOOTH, self._mac)},
+            identifiers={(DOMAIN, self._mac)},
             name="Mesh 网关",
             manufacturer=MANUFACTURER,
             model="tled.gateway",
