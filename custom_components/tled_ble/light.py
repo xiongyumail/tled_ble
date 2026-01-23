@@ -63,6 +63,11 @@ class TLEDBLELight(LightEntity):
             f"{DOMAIN}_subdevice_updated", self._handle_state_update
         )
         
+        # 注册可用性变更监听
+        self._unsub_avail = self.controller.hass.bus.async_listen(
+            f"{DOMAIN}_availability_changed", self._handle_availability_update
+        )
+        
         # 初始化状态
         if address in controller.subdevices:
             state = controller.subdevices[address]["state"]
@@ -77,6 +82,16 @@ class TLEDBLELight(LightEntity):
             self._is_on = state["on"]
             self._brightness = state["brightness"]
             self.async_write_ha_state()
+
+    @callback
+    def _handle_availability_update(self, event):
+        """处理网关可用性变更"""
+        self.async_write_ha_state()
+
+    @property
+    def available(self) -> bool:
+        """返回实体是否可用（取决于网关连接状态）"""
+        return self.controller.connected
 
     @property
     def unique_id(self):

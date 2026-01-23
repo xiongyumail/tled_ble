@@ -91,7 +91,22 @@ class TLEDBLERSSISensor(SensorEntity):
             self.hass.bus.async_listen(f"{DOMAIN}_rssi_updated", self._handle_rssi_event)
         )
 
+        # 3. 注册可用性变更监听
+        self.async_on_remove(
+            self.hass.bus.async_listen(f"{DOMAIN}_availability_changed", self._handle_availability_update)
+        )
+
         await super().async_added_to_hass()
+
+    @callback
+    def _handle_availability_update(self, event):
+        """处理网关可用性变更"""
+        self.async_write_ha_state()
+
+    @property
+    def available(self) -> bool:
+        """返回实体是否可用"""
+        return self.controller.connected
 
     @callback
     def _handle_rssi_event(self, event):

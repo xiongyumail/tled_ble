@@ -123,8 +123,11 @@ class TLEDBLEController:
                             # 稍微错开一点时间，避免瞬时拥塞
                             await asyncio.sleep(0.1)
 
-                        # 延迟 3 秒后再启动 Mesh 扫描，确保连接初期稳定
+                        # 触发 Mesh 扫描
                         self.hass.loop.call_later(3.0, lambda: self.hass.loop.create_task(self.async_scan_mesh(20)))
+
+                        # 发布可用性更新广播
+                        self.hass.bus.async_fire(f"{DOMAIN}_availability_changed", {"connected": True})
 
                         return True
                     
@@ -192,6 +195,8 @@ class TLEDBLEController:
         if self.connected:
             _LOGGER.debug(f"与设备 {self.device_address} 的连接意外断开")
             self.connected = False
+            # 发布不可用广播，使所有实体变灰
+            self.hass.bus.async_fire(f"{DOMAIN}_availability_changed", {"connected": False})
             # 触发掉线通知
             self._fire_connection_notification(False)
             # 停止心跳任务

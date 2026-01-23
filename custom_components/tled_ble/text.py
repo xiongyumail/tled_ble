@@ -51,6 +51,22 @@ class TLEDBLEDebugWrite(TextEntity):
         """返回实体图标"""
         return "mdi:console"
 
+    @property
+    def available(self) -> bool:
+        """返回实体是否可用"""
+        return self.controller.connected
+
+    async def async_added_to_hass(self) -> None:
+        """注册回调"""
+        self.async_on_remove(
+            self.hass.bus.async_listen(f"{DOMAIN}_availability_changed", self._handle_availability_update)
+        )
+
+    @callback
+    def _handle_availability_update(self, event):
+        """处理网关可用性变更"""
+        self.async_write_ha_state()
+
     async def async_set_value(self, value: str) -> None:
         """Send input hex command to device."""
         try:
