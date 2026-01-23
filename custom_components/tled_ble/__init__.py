@@ -59,9 +59,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         _LOGGER.error(f"Failed to connect to {name} at {mac}")
         return False
     
-    # 注册配置更新监听
-    entry.async_on_unload(entry.add_update_listener(async_update_options))
-    
     # 加载平台
     platforms = ["light", "text", "sensor"]
     await hass.config_entries.async_forward_entry_setups(entry, platforms)
@@ -96,7 +93,7 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry):
                 continue
         
         controller.subdevices = subdevices
-        _LOGGER.info(f"大王，设备 {mac} 的子设备配置已热更新，新设备已即时受封！")
+        _LOGGER.info(f"设备 {mac} 的子设备配置已热更新")
     # 不再调用 reload，彻底告别断连循环
     # await hass.config_entries.async_reload(entry.entry_id)
 

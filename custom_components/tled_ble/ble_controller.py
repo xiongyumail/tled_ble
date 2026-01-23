@@ -137,15 +137,15 @@ class TLEDBLEController:
                 except BleakError as e:
                     error_msg = str(e)
                     if "Operation already in progress" in error_msg or "br-connection-canceled" in error_msg:
-                        _LOGGER.warning(f"BLE操作繁忙或被取消，将在退避后重试: {error_msg}")
+                        _LOGGER.debug(f"BLE操作繁忙或被取消，将在退避后重试: {error_msg}")
                         # 遇到此类错误，额外增加等待时间，让 BlueZ 有时间清理
                         await asyncio.sleep(2.0)
                         
-                    _LOGGER.error(
+                    _LOGGER.debug(
                         f"连接过程发生BLE错误（尝试 {attempt+1}/{retries}）: {str(e)}"
                     )
                 except Exception as e:
-                    _LOGGER.exception(
+                    _LOGGER.debug(
                         f"连接过程发生意外错误（尝试 {attempt+1}/{retries}）: {str(e)}"
                     )
                 
@@ -156,7 +156,9 @@ class TLEDBLEController:
                     await asyncio.sleep(wait_time)
             
             self.connected = False
-            _LOGGER.error(f"所有 {retries} 次连接尝试均失败")
+            _LOGGER.debug(f"所有 {retries} 次连接尝试均失败")
+            # 触发掉线通知
+            self._fire_connection_notification(False)
             return False
 
     async def _cleanup_client(self):
@@ -188,8 +190,10 @@ class TLEDBLEController:
     def _on_disconnected(self, client: BleakClient) -> None:
         """连接断开时的回调处理"""
         if self.connected:
-            _LOGGER.warning(f"与设备 {self.device_address} 的连接意外断开")
+            _LOGGER.debug(f"与设备 {self.device_address} 的连接意外断开")
             self.connected = False
+            # 触发掉线通知
+            self._fire_connection_notification(False)
             # 停止心跳任务
             self._stop_heartbeat()
             # 触发自动重连（避免重复创建任务）
@@ -264,7 +268,7 @@ class TLEDBLEController:
 
     async def async_scan_mesh(self, scan_range: int = 16):
         """主动扫描Mesh网络中的设备（查询 0x0001 到 scan_range 的地址）"""
-        _LOGGER.info(f"大王，正在为您慢速巡视 Mesh 领地 (扫描前 {scan_range} 个地址)...")
+        _LOGGER.info(f"正在慢速扫描 Mesh 网络 (前 {scan_range} 个地址)...")
         for addr in range(1, scan_range + 1):
             if not self.connected:
                 break
@@ -297,6 +301,8 @@ class TLEDBLEController:
 
             if await self.connect(timeout=timeout, retries=1):
                 _LOGGER.info(f"持久化重连成功 - 设备 {self.device_address}")
+                # 连接恢复，撤销通知
+                self._fire_connection_notification(True)
                 return
 
             await asyncio.sleep(wait_time)
@@ -436,14 +442,41 @@ class TLEDBLEController:
             # 获取所有当前可见的蓝牙设备信息
             for service_info in async_discovered_service_info(self.hass, connectable=True):
                 if service_info.address == self.device_address:
-                    _LOGGER.info(f"大王！在缓存中找到了设备 {self.device_address} ({service_info.name})")
+                    _LOGGER.debug(f"在缓存中找到了设备 {self.device_address} ({service_info.name})")
                     return True
             
-            _LOGGER.warning(f"缓存中未发现设备 {self.device_address}")
+            _LOGGER.debug(f"缓存中未发现设备 {self.device_address}")
             return False
         except Exception as e:
-            _LOGGER.error(f"扫描设备时发生意外错误: {str(e)}")
+            _LOGGER.debug(f"扫描设备时发生意外错误: {str(e)}")
             return False
+
+    def _fire_connection_notification(self, is_connected: bool):
+        """发送或撤销连接状态通知"""
+        notification_id = f"tled_ble_conn_{self.mac_address.replace(':', '')}"
+        
+        if not is_connected:
+            # 发送掉线通知
+            self.hass.async_create_task(
+                self.hass.services.async_call(
+                    "persistent_notification",
+                    "create",
+                    {
+                        "title": "Mesh 网关连接状态",
+                        "message": f"您的 Mesh 网关 ({self.mac_address}) 暂时失去连接，系统正在尝试自动恢复...",
+                        "notification_id": notification_id,
+                    }
+                )
+            )
+        else:
+            # 撤销通知（当恢复连接时）
+            self.hass.async_create_task(
+                self.hass.services.async_call(
+                    "persistent_notification",
+                    "dismiss",
+                    {"notification_id": notification_id}
+                )
+            )
 
     async def __aenter__(self):
         """异步上下文管理器进入方法"""

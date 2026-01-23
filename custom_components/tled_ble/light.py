@@ -38,7 +38,7 @@ async def async_setup_entry(
         if event.data.get("controller_mac") == mac:
             address = event.data["address"]
             name = event.data["name"]
-            _LOGGER.info(f"大王，正在为新发现的设备 {name} 册封实体！")
+            _LOGGER.info(f"正在为新发现的设备 {name} 创建实体")
             async_add_entities([TLEDBLELight(controller, address, name)])
 
     # 绑定监听器到总线，并在卸载时取消
