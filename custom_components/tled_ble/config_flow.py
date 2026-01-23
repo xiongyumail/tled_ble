@@ -207,7 +207,8 @@ class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(self.selected_device.address)
             self._abort_if_unique_id_configured()
             
-            device_name = self.selected_device.name or f"TLED Device {self.selected_device.address[-5:]}"
+            mac_suffix = self.selected_device.address.replace(":", "").replace("-", "")[-4:].upper()
+            device_name = f"TLED {mac_suffix}"
             return self.async_create_entry(
                 title=device_name,
                 data={
@@ -310,7 +311,8 @@ class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(self.selected_device.address)
                 self._abort_if_unique_id_configured()
                 
-                device_name = self.selected_device.name or f"TLED Device {self.selected_device.address[-5:]}"
+                mac_suffix = self.selected_device.address.replace(":", "").replace("-", "")[-4:].upper()
+                device_name = f"TLED {mac_suffix}"
                 return self.async_create_entry(
                     title=device_name,
                     data={

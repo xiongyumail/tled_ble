@@ -18,7 +18,14 @@ async def async_setup(hass: HomeAssistant, config: dict):
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Set up TLED BLE from a config entry."""
     mac = entry.data["mac"]
-    name = entry.data["name"]
+    
+    # 动态更新集成条目名称为 TLED + MAC后四位
+    mac_suffix = mac.replace(":", "").replace("-", "")[-4:].upper()
+    new_title = f"TLED {mac_suffix}"
+    if entry.title != new_title:
+        hass.config_entries.async_update_entry(entry, title=new_title)
+    
+    name = entry.data.get("name", new_title)
     service_uuid = entry.data["service_uuid"]
     char_uuid = entry.data["char_uuid"]
     
