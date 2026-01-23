@@ -161,7 +161,9 @@ class TLEDBLEController:
     async def _cleanup_client(self):
         """内部清理客户端资源（不加锁）"""
         self._stop_heartbeat()
-        if self._reconnect_task and not self._reconnect_task.done():
+        # 修复：防止重连任务在执行过程中取消自身，导致重连中断
+        current_task = asyncio.current_task()
+        if self._reconnect_task and self._reconnect_task != current_task and not self._reconnect_task.done():
             self._reconnect_task.cancel()
             self._reconnect_task = None
 
@@ -287,6 +289,11 @@ class TLEDBLEController:
                 f"超时 {timeout}s, 下次重试等待 {wait_time}s"
             )
 
+            # 连续重连失败时，通过扫描尝试刷新 HA 蓝牙设备的缓存状态
+            if attempt > 1 and attempt % 2 == 0:
+                _LOGGER.debug(f"尝试扫描以唤醒设备缓存: {self.device_address}")
+                await self.scan_for_device(timeout=5.0)
+
             if await self.connect(timeout=timeout, retries=1):
                 _LOGGER.info(f"持久化重连成功 - 设备 {self.device_address}")
                 return
@@ -328,7 +335,9 @@ class TLEDBLEController:
         """向设备发送原始命令（增强版）"""
         async with self._connection_lock:  # 确保发送操作互斥
             if not self.connected or not self.client or not self.client.is_connected:
-                _LOGGER.warning("发送命令失败：未连接到设备，等待重连")
+                # 仅针对非心跳/查询的控制命令在断连时输出日志
+                if len(command) >= 5 and (command[3] != 0 or command[4] != 0):
+                    _LOGGER.debug(f"设备断开中，忽略发送命令: {command.hex()}")
                 return False  # 由重连任务负责恢复连接，避免在这里嵌套重连
             
             try:
