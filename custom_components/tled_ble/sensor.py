@@ -64,8 +64,7 @@ class TLEDBLERSSISensor(SensorEntity):
             identifiers={(DOMAIN, self._mac)},
             name="网关",
             manufacturer=MANUFACTURER,
-            model="Mesh 网关",
-            hw_version="Mesh 地址: 0x0001",
+            model=f"Mesh 网关 (0x{self.controller.gateway_address:04X})",
         )
 
     async def async_added_to_hass(self) -> None:
@@ -75,7 +74,7 @@ class TLEDBLERSSISensor(SensorEntity):
         if service_info:
             self._rssi = service_info.rssi
 
-        # 注册蓝牙广播回调，实时更新信号强度（使用 ACTIVE 模式提高灵敏度）
+        # 1. 注册蓝牙广播回调，实时更新信号强度（使用 ACTIVE 模式提高灵敏度）
         self.async_on_remove(
             async_register_callback(
                 self.hass,
@@ -84,7 +83,20 @@ class TLEDBLERSSISensor(SensorEntity):
                 BluetoothScanningMode.ACTIVE,
             )
         )
+
+        # 2. 注册控制器 RSSI 更新事件监听，解决连接后广播停止的问题
+        self.async_on_remove(
+            self.hass.bus.async_listen(f"{DOMAIN}_rssi_updated", self._handle_rssi_event)
+        )
+
         await super().async_added_to_hass()
+
+    @callback
+    def _handle_rssi_event(self, event):
+        """Handle RSSI update event from controller."""
+        if event.data.get("address") == self._mac:
+            self._rssi = event.data.get("rssi")
+            self.async_write_ha_state()
 
     @callback
     def _handle_bluetooth_event(self, service_info, change):

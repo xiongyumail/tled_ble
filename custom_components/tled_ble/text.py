@@ -41,8 +41,7 @@ class TLEDBLEDebugWrite(TextEntity):
             identifiers={(DOMAIN, self._mac)},
             name="网关",
             manufacturer=MANUFACTURER,
-            model="Mesh 网关",
-            hw_version="Mesh 地址: 0x0001",
+            model=f"Mesh 网关 (0x{self.controller.gateway_address:04X})",
         )
 
     @property

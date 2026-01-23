@@ -32,6 +32,7 @@ class TLEDBLEController:
         self.max_retries = 3  # 默认最大重试次数
         self.base_timeout = 15.0  # 基础超时时间（秒）
         self.subdevices = {}  # 存储子设备状态 {地址: {name, state}}
+        self.gateway_address = 0x0001  # 网关自身的 Mesh 地址
         self.config_entry = None  # 配置条目引用
         self._connection_lock = asyncio.Lock()  # 连接操作锁，避免并发冲突
         self._heartbeat_task: Optional[asyncio.Task] = None  # 心跳任务
@@ -311,6 +312,18 @@ class TLEDBLEController:
                     # 发送心跳命令（根据设备协议调整，示例为0xA5+0x00的空操作帧）
                     heartbeat_cmd = bytearray([HEADER, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
                     await self.send_command(heartbeat_cmd)
+
+                    # 连接状态下主动获取并更新 RSSI
+                    if self.client and self.client.is_connected:
+                        try:
+                            rssi = await self.client.get_rssi()
+                            self.hass.bus.async_fire(
+                                f"{DOMAIN}_rssi_updated",
+                                {"address": self.mac_address, "rssi": rssi}
+                            )
+                        except Exception:
+                            pass
+                    
                     _LOGGER.debug(f"已发送心跳包到 {self.device_address}")
                 except Exception as e:
                     _LOGGER.warning(f"心跳发送失败: {str(e)}, 将触发重连")
