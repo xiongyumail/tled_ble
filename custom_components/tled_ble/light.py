@@ -52,8 +52,8 @@ class TLEDBLELight(LightEntity):
     def __init__(self, controller: TLEDBLEController, address: int, name: str):
         self.controller = controller
         self.address = address
-        self._device_name = name
-        self._attr_name = name
+        self._device_id = name
+        self._attr_name = "灯"
         self._is_on = False
         self._brightness = 0
         self._unique_id = f"{controller.mac_address}_{address}"
@@ -108,9 +108,9 @@ class TLEDBLELight(LightEntity):
         """返回设备信息，将每个 Mesh 地址映射为独立设备"""
         return DeviceInfo(
             identifiers={(DOMAIN, f"{self.controller.mac_address}_{self.address:04X}")},
-            name=self._device_name,
+            name="Mesh 智能灯",
             manufacturer=MANUFACTURER,
-            model="Mesh 智能灯",
+            model=self._device_id,
             via_device=(DOMAIN, self.controller.mac_address),
         )
 

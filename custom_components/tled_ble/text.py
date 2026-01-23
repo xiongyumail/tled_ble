@@ -30,7 +30,7 @@ class TLEDBLEDebugWrite(TextEntity):
         self._mac = controller.mac_address
         self._attr_native_value = ""  # 修正属性名
         self._attr_unique_id = f"{self._mac}_debug_write"
-        self._attr_name = "tled.gateway.debug"
+        self._attr_name = "协议调试"
         self._attr_pattern = "^[0-9a-fA-F]*$"
         self._attr_pattern_description = "仅允许十六进制字符"
 
@@ -40,9 +40,9 @@ class TLEDBLEDebugWrite(TextEntity):
         from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH
         return DeviceInfo(
             connections={(CONNECTION_BLUETOOTH, self._mac)},
-            name="tled.gateway",
+            name="Mesh 网关",
             manufacturer=MANUFACTURER,
-            model="Mesh 网关",
+            model="tled.gateway",
         )
 
     @property

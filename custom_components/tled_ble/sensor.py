@@ -49,7 +49,7 @@ class TLEDBLERSSISensor(SensorEntity):
         self.controller = controller
         self._mac = controller.mac_address
         self._attr_unique_id = f"{self._mac}_rssi"
-        self._attr_name = "tled.gateway.rssi"
+        self._attr_name = "信号强度"
         self._rssi = None
 
     @property
@@ -63,9 +63,9 @@ class TLEDBLERSSISensor(SensorEntity):
         from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH
         return DeviceInfo(
             connections={(CONNECTION_BLUETOOTH, self._mac)},
-            name="tled.gateway",
+            name="Mesh 网关",
             manufacturer=MANUFACTURER,
-            model="Mesh 网关",
+            model="tled.gateway",
         )
 
     async def async_added_to_hass(self) -> None:
