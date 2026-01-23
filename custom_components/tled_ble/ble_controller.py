@@ -122,8 +122,8 @@ class TLEDBLEController:
                             # 稍微错开一点时间，避免瞬时拥塞
                             await asyncio.sleep(0.1)
 
-                        # 触发一次自动 Mesh 扫描，发现新设备
-                        self.hass.loop.create_task(self.async_scan_mesh(20))
+                        # 延迟 3 秒后再启动 Mesh 扫描，确保连接初期稳定
+                        self.hass.loop.call_later(3.0, lambda: self.hass.loop.create_task(self.async_scan_mesh(20)))
 
                         return True
                     
@@ -261,16 +261,22 @@ class TLEDBLEController:
 
     async def async_scan_mesh(self, scan_range: int = 16):
         """主动扫描Mesh网络中的设备（查询 0x0001 到 scan_range 的地址）"""
-        _LOGGER.info(f"正在为您巡视 Mesh 领地 (扫描前 {scan_range} 个地址)...")
+        _LOGGER.info(f"大王，正在为您慢速巡视 Mesh 领地 (扫描前 {scan_range} 个地址)...")
         for addr in range(1, scan_range + 1):
             if not self.connected:
                 break
+            # 如果地址已经在已知列表中，跳过查询
+            if addr in self.subdevices:
+                continue
             await self.send_query_command(addr)
-            await asyncio.sleep(0.3)  # 适当延时，避免网关处理不过来
+            await asyncio.sleep(0.6)  # 增加扫描间隔，保护网关不被淹没
 
     async def _persistent_reconnect(self) -> None:
         """持续重连直到成功，带指数退避策略"""
         attempt = 0
+        # 初始等待 5 秒，给蓝牙堆栈和网关一些清理时间
+        await asyncio.sleep(5.0)
+        
         while not self.connected and self.hass.is_running:
             attempt += 1
             timeout = min(self.base_timeout + (attempt * 5), 60.0)  # 最大超时60秒
@@ -326,7 +332,8 @@ class TLEDBLEController:
                 return False  # 由重连任务负责恢复连接，避免在这里嵌套重连
             
             try:
-                await self.client.write_gatt_char(self.char_uuid, command)
+                # 使用 response=False (Write Without Response)，对于 Mesh 命令更稳定且响应更快
+                await self.client.write_gatt_char(self.char_uuid, command, response=False)
                 _LOGGER.debug(f"成功发送命令到 {self.device_address}: {command.hex()}")
                 return True
             except Exception as e:

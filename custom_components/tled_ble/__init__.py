@@ -55,8 +55,36 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     return True
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry):
-    """处理配置选项更新"""
-    await hass.config_entries.async_reload(entry.entry_id)
+    """处理配置选项更新，动态同步而不重启集成"""
+    mac = entry.data["mac"]
+    if mac in hass.data[DOMAIN]:
+        controller = hass.data[DOMAIN][mac]
+        old_subdevices = set(controller.subdevices.keys())
+        
+        raw_subdevices = entry.options.get("subdevices", {})
+        subdevices = {}
+        for k, v in raw_subdevices.items():
+            try:
+                addr = int(k)
+                subdevices[addr] = v
+                # 如果是新加的设备（无论是自动发现还是手动输入），触发实体创建
+                if addr not in old_subdevices:
+                    hass.bus.async_fire(
+                        f"{DOMAIN}_new_subdevice_found",
+                        {
+                            "controller_mac": mac,
+                            "address": addr, 
+                            "name": v["name"],
+                            "state": v.get("state", {"on": False, "brightness": 0})
+                        }
+                    )
+            except (ValueError, TypeError):
+                continue
+        
+        controller.subdevices = subdevices
+        _LOGGER.info(f"大王，设备 {mac} 的子设备配置已热更新，新设备已即时受封！")
+    # 不再调用 reload，彻底告别断连循环
+    # await hass.config_entries.async_reload(entry.entry_id)
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Unload a config entry."""
