@@ -1,7 +1,7 @@
 {
   "domain": "tled_ble",
   "name": "TLED BLE Mesh",
-  "version": "2.1",
+  "version": "2.2",
   "config_flow": true,
   "documentation": "",
   "requirements": ["bleak>=0.19.5"],

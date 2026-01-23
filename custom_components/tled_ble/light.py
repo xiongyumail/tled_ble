@@ -109,7 +109,7 @@ class TLEDBLELight(LightEntity):
             identifiers={(DOMAIN, f"{self.controller.mac_address}_{self.address:04X}")},
             name=self._name,
             manufacturer=MANUFACTURER,
-            model="TLED Mesh Light",
+            model="Mesh 智能灯",
             via_device=(DOMAIN, self.controller.mac_address),
         )
 
@@ -126,7 +126,7 @@ class TLEDBLELight(LightEntity):
     @property
     def icon(self):
         """返回实体图标"""
-        return "mdi:lightbulb-group"
+        return "mdi:lightbulb"
 
     async def async_turn_on(self, **kwargs):
         """Turn on the light or adjust brightness."""

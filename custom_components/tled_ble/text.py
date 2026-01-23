@@ -30,7 +30,7 @@ class TLEDBLEDebugWrite(TextEntity):
         self._mac = controller.mac_address
         self._attr_native_value = ""  # 修正属性名
         self._attr_unique_id = f"{self._mac}_debug_write"
-        self._attr_name = f"{controller.name} Debug Write"
+        self._attr_name = "协议调试"
         self._attr_pattern = "^[0-9a-fA-F]*$"
         self._attr_pattern_description = "仅允许十六进制字符"
 
@@ -39,9 +39,9 @@ class TLEDBLEDebugWrite(TextEntity):
         """将调试工具保留在网关代理设备上"""
         return DeviceInfo(
             identifiers={(DOMAIN, self._mac)},
-            name=f"{self.controller.name} Gateway",
+            name="网关",
             manufacturer=MANUFACTURER,
-            model="BLE Mesh Gateway",
+            model="BLE Mesh 网关",
         )
 
     @property

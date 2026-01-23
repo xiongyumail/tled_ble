@@ -232,7 +232,7 @@ class TLEDBLEController:
         if address in self.subdevices:
             return
 
-        name = f"Mesh Device {address:04X}"
+        name = f"灯 {address:04X}"
         self.subdevices[address] = {
             "name": name,
             "state": {"on": is_on, "brightness": brightness}
