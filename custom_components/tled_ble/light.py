@@ -25,14 +25,26 @@ async def async_setup_entry(
     mac = entry.data[CONF_MAC]
     controller = hass.data[DOMAIN][mac]
     
-    # 创建子设备实体
+    # 1. 创建并添加初始已配置的子设备
     entities = []
-    
-    # 添加已配置的子设备
     for addr, info in controller.subdevices.items():
         entities.append(TLEDBLELight(controller, addr, info["name"]))
-    
     async_add_entities(entities)
+
+    # 2. 注册动态发现监听器
+    @callback
+    def async_discover_new_device(event):
+        """当控制器发现新 Mesh 地址时，动态添加实体"""
+        if event.data.get("controller_mac") == mac:
+            address = event.data["address"]
+            name = event.data["name"]
+            _LOGGER.info(f"大王，正在为新发现的设备 {name} 册封实体！")
+            async_add_entities([TLEDBLELight(controller, address, name)])
+
+    # 绑定监听器到总线，并在卸载时取消
+    entry.async_on_unload(
+        hass.bus.async_listen(f"{DOMAIN}_new_subdevice_found", async_discover_new_device)
+    )
 
 class TLEDBLELight(LightEntity):
     """Representation of a TLED BLE light."""

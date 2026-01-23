@@ -122,6 +122,9 @@ class TLEDBLEController:
                             # 稍微错开一点时间，避免瞬时拥塞
                             await asyncio.sleep(0.1)
 
+                        # 触发一次自动 Mesh 扫描，发现新设备
+                        self.hass.loop.create_task(self.async_scan_mesh(20))
+
                         return True
                     
                     _LOGGER.warning(f"连接尝试 {attempt+1} 未成功建立连接")
@@ -203,8 +206,14 @@ class TLEDBLEController:
         is_on = data[5] != 0
         brightness = data[6]
         
-        _LOGGER.debug(f"收到通知: 地址={address}, 开关={is_on}, 亮度={brightness}")
+        _LOGGER.debug(f"收到通知: 地址=0x{address:04X}, 开关={is_on}, 亮度={brightness}")
         
+        # 自动发现逻辑：如果地址不在已知子设备列表中，则自动添加
+        if address not in self.subdevices:
+            _LOGGER.info(f"发现新Mesh设备！地址: 0x{address:04X}")
+            self.hass.loop.create_task(self._async_add_discovered_subdevice(address, is_on, brightness))
+            return
+
         # 更新状态
         if address in self.subdevices:
             self.subdevices[address]["state"] = {
@@ -215,6 +224,49 @@ class TLEDBLEController:
                 f"{DOMAIN}_subdevice_updated",
                 {"address": address, "state": self.subdevices[address]["state"]}
             )
+
+    async def _async_add_discovered_subdevice(self, address: int, is_on: bool, brightness: int):
+        """异步添加发现的子设备并通知系统"""
+        if address in self.subdevices:
+            return
+
+        name = f"Mesh Device {address:04X}"
+        self.subdevices[address] = {
+            "name": name,
+            "state": {"on": is_on, "brightness": brightness}
+        }
+        
+        # 触发事件，让 light.py 动态添加实体
+        self.hass.bus.async_fire(
+            f"{DOMAIN}_new_subdevice_found",
+            {
+                "controller_mac": self.mac_address,
+                "address": address, 
+                "name": name,
+                "state": self.subdevices[address]["state"]
+            }
+        )
+        
+        # 更新配置条目以实现持久化
+        if self.config_entry:
+            new_options = dict(self.config_entry.options)
+            subdevices_config = new_options.get("subdevices", {}).copy()
+            # 存入配置时将地址转为字符串，保持与现有格式一致
+            subdevices_config[str(address)] = {
+                "name": name,
+                "state": self.subdevices[address]["state"]
+            }
+            new_options["subdevices"] = subdevices_config
+            self.hass.config_entries.async_update_entry(self.config_entry, options=new_options)
+
+    async def async_scan_mesh(self, scan_range: int = 16):
+        """主动扫描Mesh网络中的设备（查询 0x0001 到 scan_range 的地址）"""
+        _LOGGER.info(f"正在为您巡视 Mesh 领地 (扫描前 {scan_range} 个地址)...")
+        for addr in range(1, scan_range + 1):
+            if not self.connected:
+                break
+            await self.send_query_command(addr)
+            await asyncio.sleep(0.3)  # 适当延时，避免网关处理不过来
 
     async def _persistent_reconnect(self) -> None:
         """持续重连直到成功，带指数退避策略"""
