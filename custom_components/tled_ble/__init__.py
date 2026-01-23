@@ -37,6 +37,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
              _LOGGER.warning(f"Ignored invalid subdevice address: {k}")
     controller.subdevices = subdevices
     
+    # 识别网关自身的 Mesh 地址：寻找名称匹配或地址最小的设备作为代理参考
+    if subdevices:
+        # 优先找名称包含“网关”的，找不到则取第一个
+        gateway_addr = next((addr for addr, info in subdevices.items() if "网关" in info["name"]), next(iter(subdevices)))
+        controller.gateway_address = gateway_addr
+        _LOGGER.info(f"已将 Mesh 地址 0x{gateway_addr:04X} 设为代理网关身份")
+    
     hass.data[DOMAIN][mac] = controller
     
     # 连接到设备

@@ -233,7 +233,7 @@ class TLEDBLEController:
         if address in self.subdevices:
             return
 
-        name = f"{address:04X}"
+        name = f"tled.light.{address:04x}"
         self.subdevices[address] = {
             "name": name,
             "state": {"on": is_on, "brightness": brightness}
