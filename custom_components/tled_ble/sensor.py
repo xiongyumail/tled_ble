@@ -1,0 +1,92 @@
+"""Sensor entities for TLED BLE RSSI monitoring."""
+import logging
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
+from homeassistant.components.bluetooth import (
+    async_discovered_service_info,
+    async_last_service_info,
+    async_register_callback,
+    BluetoothScanningMode,
+)
+from homeassistant.const import (
+    CONF_MAC,
+    SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+)
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.config_entries import ConfigEntry
+
+from .const import DOMAIN, MANUFACTURER
+from .ble_controller import TLEDBLEController
+
+_LOGGER = logging.getLogger(__name__)
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up TLED BLE sensor from config entry."""
+    mac = entry.data[CONF_MAC]
+    controller = hass.data[DOMAIN][mac]
+    async_add_entities([TLEDBLERSSISensor(controller)])
+
+class TLEDBLERSSISensor(SensorEntity):
+    """Representation of a TLED BLE RSSI sensor."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_device_class = SensorDeviceClass.SIGNAL_STRENGTH
+    _attr_native_unit_of_measurement = SIGNAL_STRENGTH_DECIBELS_MILLIWATT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+
+    def __init__(self, controller: TLEDBLEController):
+        """Initialize the RSSI sensor."""
+        self.controller = controller
+        self._mac = controller.mac_address
+        self._attr_unique_id = f"{self._mac}_rssi"
+        self._attr_name = "信号强度"
+        self._rssi = None
+
+    @property
+    def native_value(self):
+        """Return the current RSSI value."""
+        return self._rssi
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device information, linking to the gateway."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._mac)},
+            name="网关",
+            manufacturer=MANUFACTURER,
+            model="Mesh 网关",
+        )
+
+    async def async_added_to_hass(self) -> None:
+        """Register callbacks when entity is added."""
+        # 初始化获取最后一次的信号强度
+        service_info = async_last_service_info(self.hass, self._mac, connectable=True)
+        if service_info:
+            self._rssi = service_info.rssi
+
+        # 注册蓝牙广播回调，实时更新信号强度
+        self.async_on_remove(
+            async_register_callback(
+                self.hass,
+                self._handle_bluetooth_event,
+                {"address": self._mac},
+                BluetoothScanningMode.PASSIVE,
+            )
+        )
+        await super().async_added_to_hass()
+
+    @callback
+    def _handle_bluetooth_event(self, service_info, change):
+        """Handle bluetooth advertisement update."""
+        self._rssi = service_info.rssi
+        self.async_write_ha_state()

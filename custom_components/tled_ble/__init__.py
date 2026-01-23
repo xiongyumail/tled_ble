@@ -49,7 +49,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     entry.async_on_unload(entry.add_update_listener(async_update_options))
     
     # 加载平台
-    platforms = ["light", "text"]
+    platforms = ["light", "text", "sensor"]
     await hass.config_entries.async_forward_entry_setups(entry, platforms)
     
     return True
@@ -96,7 +96,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
         await controller.disconnect()
     
     # 卸载平台
-    platforms = ["light", "text"]
+    platforms = ["light", "text", "sensor"]
     unload_tasks = [
         hass.config_entries.async_forward_entry_unload(entry, platform)
         for platform in platforms

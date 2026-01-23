@@ -13,6 +13,6 @@
   ],
   "codeowners": ["@xiongyu"],
   "iot_class": "local_polling",
-  "components": ["light", "text"],
+  "components": ["light", "text", "sensor"],
   "icon": "mdi:lightbulb-group"
 }
