@@ -232,7 +232,7 @@ class TLEDBLEController:
         if address in self.subdevices:
             return
 
-        name = f"灯 {address:04X}"
+        name = f"{address:04X}"
         self.subdevices[address] = {
             "name": name,
             "state": {"on": is_on, "brightness": brightness}
@@ -414,22 +414,22 @@ class TLEDBLEController:
         return success
 
     async def scan_for_device(self, timeout: float = 10.0) -> bool:
-        """扫描设备是否在范围内"""
+        """扫描设备是否在范围内（优化：直接使用 HA 的发现缓存）"""
         try:
-            scanner = async_get_scanner(self.hass)
-            _LOGGER.info(f"扫描设备 {self.device_address}，超时时间: {timeout}秒")
+            from homeassistant.components.bluetooth import async_discovered_service_info
             
-            devices = await scanner.async_discover(timeout)
-            found = any(device.address == self.device_address for device in devices)
+            _LOGGER.debug(f"正在为您检查蓝牙缓存，寻找设备 {self.device_address}...")
             
-            if found:
-                _LOGGER.info(f"在扫描中发现设备 {self.device_address}")
-                return True
-            else:
-                _LOGGER.warning(f"扫描超时，未发现设备 {self.device_address}")
-                return False
+            # 获取所有当前可见的蓝牙设备信息
+            for service_info in async_discovered_service_info(self.hass, connectable=True):
+                if service_info.address == self.device_address:
+                    _LOGGER.info(f"大王！在缓存中找到了设备 {self.device_address} ({service_info.name})")
+                    return True
+            
+            _LOGGER.warning(f"缓存中未发现设备 {self.device_address}")
+            return False
         except Exception as e:
-            _LOGGER.error(f"扫描设备时发生错误: {str(e)}")
+            _LOGGER.error(f"扫描设备时发生意外错误: {str(e)}")
             return False
 
     async def __aenter__(self):
