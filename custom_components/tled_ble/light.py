@@ -111,6 +111,7 @@ class TLEDBLELight(LightEntity):
             name=self._device_name,
             manufacturer=MANUFACTURER,
             model="Mesh 智能灯",
+            hw_version=f"Mesh 地址: 0x{self.address:04X}",
             via_device=(DOMAIN, self.controller.mac_address),
         )
 

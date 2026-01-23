@@ -42,6 +42,7 @@ class TLEDBLEDebugWrite(TextEntity):
             name="网关",
             manufacturer=MANUFACTURER,
             model="Mesh 网关",
+            hw_version="Mesh 地址: 0x0001",
         )
 
     @property

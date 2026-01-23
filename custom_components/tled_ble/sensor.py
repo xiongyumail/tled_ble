@@ -65,6 +65,7 @@ class TLEDBLERSSISensor(SensorEntity):
             name="网关",
             manufacturer=MANUFACTURER,
             model="Mesh 网关",
+            hw_version="Mesh 地址: 0x0001",
         )
 
     async def async_added_to_hass(self) -> None:
@@ -74,13 +75,13 @@ class TLEDBLERSSISensor(SensorEntity):
         if service_info:
             self._rssi = service_info.rssi
 
-        # 注册蓝牙广播回调，实时更新信号强度
+        # 注册蓝牙广播回调，实时更新信号强度（使用 ACTIVE 模式提高灵敏度）
         self.async_on_remove(
             async_register_callback(
                 self.hass,
                 self._handle_bluetooth_event,
                 {"address": self._mac},
-                BluetoothScanningMode.PASSIVE,
+                BluetoothScanningMode.ACTIVE,
             )
         )
         await super().async_added_to_hass()
