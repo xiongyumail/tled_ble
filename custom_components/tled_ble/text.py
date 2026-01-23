@@ -25,6 +25,8 @@ async def async_setup_entry(
 class TLEDBLEDebugWrite(TextEntity):
     """Text entity to send raw hex commands via BLE."""
     
+    _attr_has_entity_name = True
+
     def __init__(self, controller: TLEDBLEController):
         self.controller = controller
         self._mac = controller.mac_address
@@ -41,9 +43,9 @@ class TLEDBLEDebugWrite(TextEntity):
         return DeviceInfo(
             connections={(CONNECTION_BLUETOOTH, self._mac)},
             identifiers={(DOMAIN, self._mac)},
-            name="Mesh 网关",
+            name="tled.gateway",
             manufacturer=MANUFACTURER,
-            model="tled.gateway",
+            model="Mesh 网关",
         )
 
     @property

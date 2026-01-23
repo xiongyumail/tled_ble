@@ -49,6 +49,8 @@ async def async_setup_entry(
 class TLEDBLELight(LightEntity):
     """Representation of a TLED BLE light."""
 
+    _attr_has_entity_name = True
+
     def __init__(self, controller: TLEDBLEController, address: int, name: str):
         self.controller = controller
         self.address = address
@@ -123,9 +125,9 @@ class TLEDBLELight(LightEntity):
         """返回设备信息，将每个 Mesh 地址映射为独立设备"""
         return DeviceInfo(
             identifiers={(DOMAIN, f"{self.controller.mac_address}_{self.address:04X}")},
-            name="Mesh 智能灯",
+            name=self._device_id,
             manufacturer=MANUFACTURER,
-            model=self._device_id,
+            model="Mesh 智能灯",
             via_device=(DOMAIN, self.controller.mac_address),
         )
 
