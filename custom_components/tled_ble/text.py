@@ -36,11 +36,12 @@ class TLEDBLEDebugWrite(TextEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return device information."""
+        """将调试工具保留在网关代理设备上"""
         return DeviceInfo(
             identifiers={(DOMAIN, self._mac)},
-            name=self.controller.name,
+            name=f"{self.controller.name} Gateway",
             manufacturer=MANUFACTURER,
+            model="BLE Mesh Gateway",
         )
 
     @property
