@@ -1,7 +1,7 @@
 """Text entity for TLED BLE debug command input."""
 import logging
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.components.text import TextEntity
 from homeassistant.const import CONF_MAC
 from homeassistant.helpers.entity import DeviceInfo
