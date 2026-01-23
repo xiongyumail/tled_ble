@@ -8,7 +8,7 @@
   "dependencies": [],
   "bluetooth": [
     {
-      "name": "TLED*"
+      "name": "TLED"
     }
   ],
   "codeowners": ["@xiongyu"],
