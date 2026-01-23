@@ -43,9 +43,9 @@ class TLEDBLEDebugWrite(TextEntity):
         return DeviceInfo(
             connections={(CONNECTION_BLUETOOTH, self._mac)},
             identifiers={(DOMAIN, self._mac)},
-            name="tled.gateway",
+            name="Mesh 网关",
             manufacturer=MANUFACTURER,
-            model="Mesh 网关",
+            model="tled.gateway",
         )
 
     @property

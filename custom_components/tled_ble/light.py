@@ -125,9 +125,9 @@ class TLEDBLELight(LightEntity):
         """返回设备信息，将每个 Mesh 地址映射为独立设备"""
         return DeviceInfo(
             identifiers={(DOMAIN, f"{self.controller.mac_address}_{self.address:04X}")},
-            name=self._device_id,
+            name="Mesh 智能灯",
             manufacturer=MANUFACTURER,
-            model="Mesh 智能灯",
+            model=self._device_id,
             via_device=(DOMAIN, self.controller.mac_address),
         )
 
