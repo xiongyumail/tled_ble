@@ -3,7 +3,7 @@ import logging
 import asyncio
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.config_entries import ConfigFlow, ConfigEntry, OptionsFlow
+from homeassistant.config_entries import ConfigFlow, ConfigEntry
 from homeassistant.core import callback
 from homeassistant.const import CONF_NAME, CONF_MAC
 from homeassistant.data_entry_flow import FlowResult
@@ -395,7 +395,3 @@ class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
         except:
             return False
 
-    @callback
-    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
-        """不再提供选项流程，由自动发现接管"""
-        return None
