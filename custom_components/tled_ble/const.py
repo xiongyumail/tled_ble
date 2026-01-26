@@ -1,10 +1,10 @@
 # tled_ble/const.py
 """TLED BLE集成的常量定义"""
 DOMAIN = "tled_ble"
-MANUFACTURER = "TLED"
+MANUFACTURER = "MeshHome"
 
-# 设备筛选前缀
-DEVICE_NAME_PREFIX = "TLED"
+# 默认设备前缀
+DEFAULT_PREFIX = "MESH"
 
 # 命令格式常量
 HEADER = 0xA5

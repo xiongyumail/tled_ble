@@ -1,4 +1,4 @@
-"""Text entity for TLED BLE debug command input."""
+"""Text entity for MeshHome debug command input."""
 import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -45,7 +45,7 @@ class TLEDBLEDebugWrite(TextEntity):
             identifiers={(DOMAIN, self._mac)},
             name="Mesh 网关",
             manufacturer=MANUFACTURER,
-            model="tled.gateway",
+            model="MeshHome Gateway",
         )
 
     @property

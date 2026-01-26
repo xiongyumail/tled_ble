@@ -1,11 +1,11 @@
 # tled_ble/__init__.py
-"""The TLED BLE integration."""
+"""The MeshHome integration."""
 import logging
 import asyncio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
+from .const import DOMAIN, DEFAULT_PREFIX
 from .ble_controller import TLEDBLEController
 
 _LOGGER = logging.getLogger(__name__)
@@ -19,9 +19,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     """Set up TLED BLE from a config entry."""
     mac = entry.data["mac"]
     
-    # 动态更新集成条目名称为 TLED + MAC后四位
+    # 动态更新集成条目名称，保留发现时的前缀
     mac_suffix = mac.replace(":", "").replace("-", "")[-4:].upper()
-    new_title = f"TLED {mac_suffix}"
+    
+    # 尝试从现有 title 中提取前缀，默认为常量定义的默认值
+    current_prefix = DEFAULT_PREFIX
+    if entry.title and " " in entry.title:
+        current_prefix = entry.title.split()[0]
+            
+    new_title = f"{current_prefix} {mac_suffix}"
     if entry.title != new_title:
         hass.config_entries.async_update_entry(entry, title=new_title)
     

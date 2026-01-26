@@ -11,12 +11,12 @@ from bleak import BleakScanner, BleakClient
 from bleak.backends.device import BLEDevice
 from bleak.backends.characteristic import BleakGATTCharacteristic
 
-from .const import DOMAIN, MANUFACTURER, DEVICE_NAME_PREFIX, DEFAULT_SERVICE_UUID, DEFAULT_CHAR_UUID
+from .const import DOMAIN, MANUFACTURER, DEFAULT_PREFIX, DEFAULT_SERVICE_UUID, DEFAULT_CHAR_UUID
 
 _LOGGER = logging.getLogger(__name__)
 
 class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
-    """TLED BLE设备的配置流程，支持扫描和信号强度显示"""
+    """MeshHome 设备的配置流程，支持扫描和信号强度显示"""
     
     VERSION = 1
     SCAN_DURATION = 10  # 扫描持续时间（秒）
@@ -96,17 +96,16 @@ class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                 return_adv=True  # 返回广告数据以获取RSSI
             )
             
-            # 筛选TLED设备并提取RSSI
+            # 自动提取设备名称
             for device, adv_data in devices.values():
-                # 筛选名称包含特定前缀的设备
-                if device.name and DEVICE_NAME_PREFIX.lower() in device.name.lower():
-                    # 过滤掉 RSSI 为 -127 的无效设备（通常是失效缓存）
+                if device.name:
+                    # 过滤掉 RSSI 极低的设备（通常是失效缓存）
                     if adv_data.rssi <= -100:
                         continue
 
                     self.discovered_devices.append(device)
                     _LOGGER.info(
-                        f"发现TLED设备: {device.name} ({device.address}), "
+                        f"发现设备: {device.name} ({device.address}), "
                         f"信号强度: {adv_data.rssi} dBm"
                     )
 
@@ -208,7 +207,17 @@ class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
             self._abort_if_unique_id_configured()
             
             mac_suffix = self.selected_device.address.replace(":", "").replace("-", "")[-4:].upper()
-            device_name = f"TLED {mac_suffix}"
+            # 自动从广播名中提取前缀 (支持 TLED, TLED_1234, TLED 1234, TH 2345, TH 等)
+            prefix = DEFAULT_PREFIX
+            if self.selected_device.name:
+                # 统一处理空格和下划线
+                name = self.selected_device.name.replace("_", " ")
+                name_parts = name.split()
+                if name_parts:
+                    # 提取第一个部分作为前缀 (如 TLED 或 TH)
+                    prefix = name_parts[0]
+            
+            device_name = f"{prefix} {mac_suffix}"
             return self.async_create_entry(
                 title=device_name,
                 data={
@@ -312,7 +321,17 @@ class TLEDBLEConfigFlow(ConfigFlow, domain=DOMAIN):
                 self._abort_if_unique_id_configured()
                 
                 mac_suffix = self.selected_device.address.replace(":", "").replace("-", "")[-4:].upper()
-                device_name = f"TLED {mac_suffix}"
+                # 自动从广播名中提取前缀 (支持 TLED, TLED_1234, TLED 1234, TH 2345, TH 等)
+                prefix = DEFAULT_PREFIX
+                if self.selected_device.name:
+                    # 统一处理空格和下划线
+                    name = self.selected_device.name.replace("_", " ")
+                    name_parts = name.split()
+                    if name_parts:
+                        # 提取第一个部分作为前缀 (如 TLED 或 TH)
+                        prefix = name_parts[0]
+                
+                device_name = f"{prefix} {mac_suffix}"
                 return self.async_create_entry(
                     title=device_name,
                     data={

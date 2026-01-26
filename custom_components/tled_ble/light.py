@@ -1,4 +1,4 @@
-"""Light entities for TLED BLE integration."""
+"""Light entities for MeshHome integration."""
 import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.components.light import (
@@ -47,7 +47,7 @@ async def async_setup_entry(
     )
 
 class TLEDBLELight(LightEntity):
-    """Representation of a TLED BLE light."""
+    """Representation of a MeshHome light."""
 
     _attr_has_entity_name = True
 

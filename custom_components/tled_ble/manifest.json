@@ -1,6 +1,6 @@
 {
   "domain": "tled_ble",
-  "name": "TLED BLE Mesh",
+  "name": "MeshHome",
   "version": "2.5",
   "config_flow": true,
   "documentation": "",

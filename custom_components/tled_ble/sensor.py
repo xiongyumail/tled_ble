@@ -1,4 +1,4 @@
-"""Sensor entities for TLED BLE RSSI monitoring."""
+"""Sensor entities for MeshHome RSSI monitoring."""
 import logging
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -36,7 +36,7 @@ async def async_setup_entry(
     async_add_entities([TLEDBLERSSISensor(controller)])
 
 class TLEDBLERSSISensor(SensorEntity):
-    """Representation of a TLED BLE RSSI sensor."""
+    """Representation of a MeshHome RSSI sensor."""
 
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_device_class = SensorDeviceClass.SIGNAL_STRENGTH
@@ -66,7 +66,7 @@ class TLEDBLERSSISensor(SensorEntity):
             identifiers={(DOMAIN, self._mac)},
             name="Mesh 网关",
             manufacturer=MANUFACTURER,
-            model="tled.gateway",
+            model="MeshHome Gateway",
         )
 
     async def async_added_to_hass(self) -> None:

@@ -2,12 +2,12 @@
     "config": {
         "step": {
             "user": {
-                "title": "TLED BLE 配置",
+                "title": "MeshHome 配置",
                 "description": "请选择配置方式："
             },
             "bluetooth_confirm": {
                 "title": "发现新设备",
-                "description": "发现 TLED 设备：{name}\nMAC 地址：{address}\n\n是否要配置此设备？"
+                "description": "发现 {name} ({address})\n\n是否要配置此设备？"
             },
             "select_service": {
                 "title": "选择服务",
